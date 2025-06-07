@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Generate Icon PNGs</title>
+</head>
+<body>
+    <h1>LLM Knowledge Hub Icons</h1>
+    <p>アイコンを生成するためのHTMLファイルです。以下のCanvasから右クリックで画像を保存してください。</p>
+    
+    <h2>Icon 16x16</h2>
+    <canvas id="icon16" width="16" height="16"></canvas>
+    
+    <h2>Icon 48x48</h2>
+    <canvas id="icon48" width="48" height="48"></canvas>
+    
+    <h2>Icon 128x128</h2>
+    <canvas id="icon128" width="128" height="128"></canvas>
+
+    <script>
+        function drawIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#4285f4');
+            gradient.addColorStop(1, '#34a853');
+            
+            // Draw background circle
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 1, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw lightbulb emoji
+            ctx.fillStyle = 'white';
+            ctx.font = `${size * 0.6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💡', size/2, size/2);
+            
+            // Add subtle shadow
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = size * 0.1;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = size * 0.05;
+        }
+        
+        // Generate all sizes
+        drawIcon('icon16', 16);
+        drawIcon('icon48', 48);
+        drawIcon('icon128', 128);
+        
+        // Auto-download function
+        function downloadCanvas(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        // Add download buttons
+        setTimeout(() => {
+            document.querySelectorAll('canvas').forEach(canvas => {
+                const btn = document.createElement('button');
+                btn.textContent = `Download ${canvas.id}.png`;
+                btn.onclick = () => downloadCanvas(canvas.id, `${canvas.id}.png`);
+                canvas.parentNode.insertBefore(btn, canvas.nextSibling);
+                canvas.parentNode.insertBefore(document.createElement('br'), btn.nextSibling);
+            });
+        }, 100);
+    </script>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            background: white;
+            display: block;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px;
+            margin: 10px 0;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #3367d6;
+        }
+    </style>
+</body>
+</html>
