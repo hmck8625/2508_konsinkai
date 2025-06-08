@@ -49,3 +49,12 @@ coverage/
 # Temporary files
 .tmp/
 temp/
+
+# Ignore everything outside project folder
+../../../*
+../../*
+../*
+!../webアプリ要件定義所.md
+!../対話型AI会話のナレッジ化システム.md
+!../広告代理店_生成AI活用促進_ユースケース共有システム提案書.md
+!../運用性重視_AI活用システム詳細設計.md
