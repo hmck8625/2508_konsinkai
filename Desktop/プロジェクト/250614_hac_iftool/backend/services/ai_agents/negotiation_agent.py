@@ -176,6 +176,8 @@ class NegotiationAgent(BaseAgent):
                 return await self.negotiate_price(input_data)
             elif action == "generate_reply_patterns":
                 return await self.generate_reply_patterns(input_data)
+            elif action == "generate_email_response":
+                return await self.generate_email_response(input_data)
             else:
                 return {
                     "success": False,
@@ -938,6 +940,148 @@ class NegotiationAgent(BaseAgent):
                 "reasoning": "市場価格と予算を考慮した現実的な提案"
             }
     
+    async def generate_email_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        受信メールに対する返信生成
+        
+        Args:
+            data: メール応答生成用データ
+            
+        Returns:
+            Dict: 生成された返信内容
+        """
+        try:
+            email = data.get("email", {})
+            influencer = data.get("influencer")
+            user_signature = data.get("user_signature", "")
+            reply_type = data.get("reply_type", "response_to_inquiry")
+            
+            logger.info(f"🤖 Generating email response for: {email.get('sender', 'unknown')}")
+            
+            # インフルエンサー情報の整理
+            influencer_context = ""
+            if influencer:
+                channel_name = influencer.get('channel_title', influencer.get('channel_name', ''))
+                subscriber_count = influencer.get('subscriber_count', 0)
+                category = influencer.get('category', influencer.get('primary_category', ''))
+                
+                influencer_context = f"""
+## インフルエンサー情報
+- チャンネル名: {channel_name}
+- 登録者数: {subscriber_count:,}人
+- カテゴリ: {category}
+"""
+                
+                # AI分析データがある場合
+                if 'ai_analysis' in influencer:
+                    ai_data = influencer['ai_analysis']
+                    if 'channel_summary' in ai_data:
+                        summary = ai_data['channel_summary']
+                        influencer_context += f"- コンテンツ特徴: {summary.get('content_style', 'N/A')}\n"
+                        influencer_context += f"- 専門性: {summary.get('expertise_level', 'N/A')}\n"
+                
+                if 'recommended_products' in influencer:
+                    products = influencer['recommended_products'][:2]
+                    if products:
+                        product_names = [p.get('category', 'N/A') for p in products]
+                        influencer_context += f"- 推奨商材: {', '.join(product_names)}\n"
+            
+            # 返信タイプに応じたプロンプト調整
+            response_guidance = {
+                "response_to_inquiry": "問い合わせに対する丁寧で親しみやすい返信",
+                "collaboration_proposal": "コラボレーション提案への返信",
+                "negotiation_response": "価格交渉や条件交渉への返信",
+                "general_response": "一般的な問い合わせへの返信"
+            }.get(reply_type, "一般的な返信")
+            
+            # プロンプト構築
+            prompt = f"""
+以下の受信メールに対して、自然で人間らしい{response_guidance}を生成してください。
+
+## 受信メール
+件名: {email.get('subject', '')}
+送信者: {email.get('sender', '')}
+内容:
+{email.get('body', '')}
+
+{influencer_context}
+
+## 返信作成指示
+1. 受信メールの内容を理解し、適切に応答する
+2. インフルエンサーのチャンネル特徴があれば自然に言及する
+3. 親しみやすく、かつプロフェッショナルなトーン
+4. 具体的で建設的な内容にする
+5. 次のステップを明確に示す
+6. 人間らしい温かみのある文章
+7. AIっぽさを絶対に出さない
+
+## 文体・スタイル
+- カジュアル敬語で親しみやすく
+- 適度に絵文字を使用（控えめに）
+- 完璧すぎない、自然な文章
+- 400-600文字程度
+
+## 署名
+{user_signature if user_signature else "InfuMatch運営チーム"}
+
+件名と本文を生成してください。
+"""
+            
+            # AI生成実行
+            response = await self.generate_response(prompt)
+            
+            if response.get("success"):
+                # 人間らしさを追加
+                email_content = self._add_human_touches(response["content"])
+                
+                return {
+                    "success": True,
+                    "content": email_content,
+                    "reply_type": reply_type,
+                    "agent": self.config.name,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "influencer_matched": influencer is not None
+                }
+            else:
+                # フォールバック返信
+                fallback_content = self._generate_fallback_email_response(email, user_signature)
+                
+                return {
+                    "success": True,
+                    "content": fallback_content,
+                    "reply_type": "fallback",
+                    "agent": self.config.name,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "fallback_used": True
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Email response generation failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def _generate_fallback_email_response(self, email: Dict[str, Any], signature: str) -> str:
+        """フォールバック用メール返信生成"""
+        sender_name = email.get("sender", "").split("@")[0] if "@" in email.get("sender", "") else "様"
+        
+        fallback_reply = f"""件名: Re: {email.get('subject', '')}
+
+{sender_name}様
+
+お忙しい中、お問い合わせいただきありがとうございます。
+
+いただいたメールについて確認させていただき、
+詳しい内容をお調べして改めてご連絡いたします。
+
+ご不明な点がございましたら、
+いつでもお気軽にお声かけください。
+
+{signature if signature else 'InfuMatch運営チーム'}"""
+        
+        return fallback_reply
+
     def get_capabilities(self) -> List[str]:
         """エージェントの機能一覧"""
         return [
@@ -950,5 +1094,6 @@ class NegotiationAgent(BaseAgent):
             "返信パターン複数生成",
             "メールスレッド分析",
             "感情トーン分析",
+            "メール自動返信生成",
             "緊急度判定"
         ]

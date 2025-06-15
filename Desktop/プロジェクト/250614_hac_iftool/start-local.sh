@@ -49,16 +49,26 @@ setup_env_files() {
     
     # バックエンド用
     if [ ! -f ".env" ]; then
-        cp .env.local .env
-        log_success "Created .env file"
+        if [ -f ".env.local" ]; then
+            cp .env.local .env
+            log_success "Created .env file from .env.local"
+        else
+            log_error ".env.local not found. Please create it first."
+            exit 1
+        fi
     else
         log_info ".env file already exists"
     fi
     
     # フロントエンド用
     if [ ! -f "frontend/.env.local" ]; then
-        cp frontend/.env.local.example frontend/.env.local
-        log_success "Created frontend/.env.local file"
+        if [ -f ".env.local" ]; then
+            cp .env.local frontend/.env.local
+            log_success "Created frontend/.env.local file"
+        else
+            log_error "No .env.local found to copy to frontend"
+            exit 1
+        fi
     else
         log_info "frontend/.env.local file already exists"
     fi
@@ -91,15 +101,56 @@ start_backend() {
         pip install -r requirements.txt
     fi
     
-    log_success "Backend setup completed"
-    log_info "Starting FastAPI server on http://localhost:8000"
+    # Vertex AI/Gemini API関連の追加インストール
+    log_info "Installing AI dependencies..."
+    pip install vertexai google-cloud-aiplatform google-generativeai
     
-    # バックグラウンドでサーバー起動
-    nohup uvicorn main:app --reload --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+    # 環境変数の設定
+    export GOOGLE_APPLICATION_CREDENTIALS="../hackathon-462905-7d72a76d3742.json"
+    
+    # .env.localから環境変数を読み込み
+    if [ -f "../.env.local" ]; then
+        export $(grep -v '^#' ../.env.local | xargs)
+    fi
+    
+    log_success "Backend setup completed"
+    log_info "Starting FastAPI server on http://localhost:8001"
+    
+    # バックグラウンドでサーバー起動（simple_firestore_testを使用）
+    nohup python -m uvicorn simple_firestore_test:app --reload --host 0.0.0.0 --port 8001 > ../backend.log 2>&1 &
     BACKEND_PID=$!
     echo $BACKEND_PID > ../backend.pid
     
     cd ..
+}
+
+# 既存プロセスの停止
+stop_existing_processes() {
+    log_info "Stopping existing processes..."
+    
+    # ポート8001のプロセスを停止
+    if lsof -ti:8001 >/dev/null 2>&1; then
+        log_info "Stopping processes on port 8001..."
+        lsof -ti:8001 | xargs kill -9 2>/dev/null || true
+    fi
+    
+    # ポート3000のプロセスを停止
+    if lsof -ti:3000 >/dev/null 2>&1; then
+        log_info "Stopping processes on port 3000..."
+        lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+    fi
+    
+    # Next.jsプロセスを停止
+    pkill -f "next dev" 2>/dev/null || true
+    pkill -f "npm run dev" 2>/dev/null || true
+    pkill -f "uvicorn.*simple_firestore_test" 2>/dev/null || true
+    
+    # PIDファイルがあれば削除
+    [ -f "backend.pid" ] && rm -f backend.pid
+    [ -f "frontend.pid" ] && rm -f frontend.pid
+    
+    sleep 2
+    log_success "Existing processes stopped"
 }
 
 # フロントエンドのセットアップと起動
@@ -111,6 +162,12 @@ start_frontend() {
     # 依存関係のインストール
     log_info "Installing Node.js dependencies..."
     npm install
+    
+    # .nextディレクトリをクリーンアップ
+    if [ -d ".next" ]; then
+        log_info "Cleaning .next directory..."
+        rm -rf .next
+    fi
     
     log_success "Frontend setup completed"
     log_info "Starting Next.js server on http://localhost:3000"
@@ -126,13 +183,17 @@ start_frontend() {
 # サーバーの起動確認
 check_servers() {
     log_info "Waiting for servers to start..."
-    sleep 5
+    sleep 8
     
-    # バックエンドの確認
-    if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-        log_success "Backend is running on http://localhost:8000"
+    # バックエンドの確認（simple_firestore_testはルートエンドポイントを使用）
+    if curl -f http://localhost:8001/ > /dev/null 2>&1; then
+        log_success "Backend is running on http://localhost:8001"
+    elif curl -f http://localhost:8001/api/v1/influencers > /dev/null 2>&1; then
+        log_success "Backend is running on http://localhost:8001"
     else
         log_error "Backend failed to start. Check backend.log for details."
+        log_info "Checking backend logs..."
+        tail -n 10 ../backend.log 2>/dev/null || log_info "No backend logs yet"
     fi
     
     # フロントエンドの確認
@@ -169,6 +230,16 @@ if [ -f "frontend.pid" ]; then
     rm frontend.pid
 fi
 
+# ポートベースでプロセスを停止
+echo "🔄 Stopping processes by port..."
+lsof -ti:8001 | xargs kill -9 2>/dev/null || true
+lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+
+# プロセス名で停止
+pkill -f "next dev" 2>/dev/null || true
+pkill -f "npm run dev" 2>/dev/null || true
+pkill -f "uvicorn.*simple_firestore_test" 2>/dev/null || true
+
 echo "🎉 All services stopped"
 EOF
 
@@ -179,6 +250,7 @@ EOF
 # メイン実行
 main() {
     check_prerequisites
+    stop_existing_processes
     setup_env_files
     start_backend
     start_frontend
@@ -190,13 +262,21 @@ main() {
     echo ""
     echo "🔗 Access URLs:"
     echo "   Frontend: http://localhost:3000"
-    echo "   Backend API: http://localhost:8000"
-    echo "   API Docs: http://localhost:8000/docs"
+    echo "   Backend API: http://localhost:8001"
+    echo "   API Docs: http://localhost:8001/docs"
+    echo "   Influencers API: http://localhost:8001/api/v1/influencers"
+    echo "   Collaboration Proposal: http://localhost:8001/api/v1/collaboration-proposal"
+    echo ""
+    echo "🤖 AI Features:"
+    echo "   Vertex AI/Gemini API: Auto-fallback enabled"
+    echo "   Negotiation Agent: Active"
+    echo "   Gmail Integration: Available"
     echo ""
     echo "📋 Useful commands:"
     echo "   View backend logs: tail -f backend.log"
     echo "   View frontend logs: tail -f frontend.log"
     echo "   Stop all services: ./stop-local.sh"
+    echo "   Test API: curl http://localhost:8001/api/v1/influencers"
     echo ""
     echo "Press Ctrl+C to view this information again, or run ./stop-local.sh to stop all services"
 }

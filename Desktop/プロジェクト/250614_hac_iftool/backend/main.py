@@ -84,6 +84,20 @@ except ImportError:
     from fastapi import APIRouter
     data_sync_router = APIRouter()
 
+# 統合マッチング API ルーター
+try:
+    from api.centralized_matching import router as centralized_matching_router
+except ImportError:
+    from fastapi import APIRouter
+    centralized_matching_router = APIRouter()
+
+# メール自動返信 API ルーター
+try:
+    from api.email_auto_reply import router as email_auto_reply_router
+except ImportError:
+    from fastapi import APIRouter
+    email_auto_reply_router = APIRouter()
+
 # ミドルウェア（存在しない場合はダミーを使用）
 try:
     from middleware.rate_limit import RateLimitMiddleware
@@ -324,6 +338,18 @@ def setup_routers(app: FastAPI) -> None:
         data_sync_router,
         prefix="/api/v1/data",
         tags=["Data Sync & Analytics"]
+    )
+    
+    # 統合マッチング API
+    app.include_router(
+        centralized_matching_router,
+        tags=["Centralized Matching"]
+    )
+    
+    # メール自動返信 API
+    app.include_router(
+        email_auto_reply_router,
+        tags=["Email Auto Reply"]
     )
 
 

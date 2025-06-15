@@ -263,7 +263,7 @@ class LLMKnowledgeHub {
 
   detectPlatform(url) {
     if (!url) return 'unknown';
-    if (url.includes('chat.openai.com')) return 'chatgpt';
+    if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) return 'chatgpt';
     if (url.includes('claude.ai')) return 'claude';
     if (url.includes('copilot.microsoft.com')) return 'copilot';
     if (url.includes('bard.google.com')) return 'bard';
@@ -354,7 +354,7 @@ class LLMKnowledgeHub {
 
   getPlatformUrl(platform) {
     const urls = {
-      chatgpt: 'https://chat.openai.com/',
+      chatgpt: 'https://chatgpt.com/',
       claude: 'https://claude.ai/',
       copilot: 'https://copilot.microsoft.com/',
       bard: 'https://bard.google.com/'

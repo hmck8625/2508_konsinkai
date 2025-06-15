@@ -27,22 +27,40 @@ import {
   Info
 } from 'lucide-react';
 
-interface CompanySettings {
-  // 企業基本情報
-  companyName: string;
-  industry: string;
-  description: string;
-  contactEmail: string;
-  contactPerson: string;
-  
-  // 商材情報
-  products: ProductInfo[];
-  
-  // 交渉設定
-  negotiationSettings: NegotiationSettings;
-  
-  // AIマッチング設定
-  matchingPreferences: MatchingPreferences;
+interface UserSettings {
+  userId: string;
+  companyInfo: {
+    companyName: string;
+    industry: string;
+    employeeCount: string;
+    website: string;
+    description: string;
+  };
+  products: Array<{
+    id: string;
+    name: string;
+    category: string;
+    targetAudience: string;
+    priceRange: string;
+    description: string;
+  }>;
+  negotiationSettings: {
+    preferredTone: string;
+    responseTimeExpectation: string;
+    budgetFlexibility: string;
+    decisionMakers: string[];
+    communicationPreferences: string[];
+  };
+  matchingSettings: {
+    priorityCategories: string[];
+    minSubscribers: number;
+    maxSubscribers: number;
+    minEngagementRate: number;
+    excludeCategories: string[];
+    geographicFocus: string[];
+  };
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface ProductInfo {
@@ -90,32 +108,33 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   
-  const [settings, setSettings] = useState<CompanySettings>({
-    companyName: '',
-    industry: '',
-    description: '',
-    contactEmail: '',
-    contactPerson: '',
+  const [settings, setSettings] = useState<UserSettings>({
+    userId: '',
+    companyInfo: {
+      companyName: '',
+      industry: '',
+      employeeCount: '',
+      website: '',
+      description: ''
+    },
     products: [],
     negotiationSettings: {
-      defaultBudgetRange: { min: 10000, max: 100000 },
-      negotiationTone: 'friendly',
-      keyPriorities: [],
-      avoidTopics: [],
-      specialInstructions: '',
-      maxNegotiationRounds: 5,
-      autoApprovalThreshold: 50000
+      preferredTone: 'professional',
+      responseTimeExpectation: '24時間以内',
+      budgetFlexibility: 'medium',
+      decisionMakers: [],
+      communicationPreferences: ['email']
     },
-    matchingPreferences: {
-      preferredChannelTypes: [],
-      minimumSubscribers: 1000,
-      maximumSubscribers: 1000000,
-      preferredCategories: [],
-      geographicPreferences: [],
-      ageGroups: [],
-      excludeKeywords: [],
-      priorityKeywords: []
-    }
+    matchingSettings: {
+      priorityCategories: [],
+      minSubscribers: 1000,
+      maxSubscribers: 1000000,
+      minEngagementRate: 2.0,
+      excludeCategories: [],
+      geographicFocus: ['日本']
+    },
+    createdAt: '',
+    updatedAt: ''
   });
 
   const [newProduct, setNewProduct] = useState<Partial<ProductInfo>>({
@@ -134,14 +153,21 @@ export default function SettingsPage() {
 
   const loadSettings = async () => {
     try {
-      // TODO: 実際のAPIエンドポイントに置き換え
+      console.log('📞 Loading user settings...');
       const response = await fetch('/api/settings');
       if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
+        const result = await response.json();
+        if (result.success && result.data) {
+          console.log('✅ Settings loaded successfully');
+          setSettings(result.data);
+        } else {
+          console.error('❌ Failed to load settings:', result.error);
+        }
+      } else {
+        console.error('❌ API Error:', response.status);
       }
     } catch (error) {
-      console.error('設定読み込みエラー:', error);
+      console.error('❌ Settings load error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -150,8 +176,8 @@ export default function SettingsPage() {
   const saveSettings = async () => {
     try {
       setIsSaving(true);
+      console.log('💾 Saving settings...');
       
-      // TODO: 実際のAPIエンドポイントに置き換え
       const response = await fetch('/api/settings', {
         method: 'PUT',
         headers: {
@@ -160,16 +186,24 @@ export default function SettingsPage() {
         body: JSON.stringify(settings)
       });
       
-      if (response.ok) {
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        console.log('✅ Settings saved successfully');
         setSaveMessage('設定が正常に保存されました');
+        if (result.data) {
+          setSettings(result.data);
+        }
         setTimeout(() => setSaveMessage(null), 3000);
       } else {
-        throw new Error('保存に失敗しました');
+        console.error('❌ Save failed:', result.error);
+        setSaveMessage(`保存エラー: ${result.error || '不明なエラー'}`);
+        setTimeout(() => setSaveMessage(null), 5000);
       }
     } catch (error) {
-      console.error('設定保存エラー:', error);
+      console.error('❌ Settings save error:', error);
       setSaveMessage('保存中にエラーが発生しました');
-      setTimeout(() => setSaveMessage(null), 3000);
+      setTimeout(() => setSaveMessage(null), 5000);
     } finally {
       setIsSaving(false);
     }

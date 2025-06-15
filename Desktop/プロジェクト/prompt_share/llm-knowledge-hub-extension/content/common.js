@@ -157,21 +157,59 @@ class LLMContentCommon {
 
   // Extract conversation data from messages
   extractConversationData(messages) {
-    if (messages.length < 2) return null;
+    console.log(`[Common] Extracting conversation data from ${messages.length} messages`);
+    
+    if (messages.length < 2) {
+      console.log('[Common] Not enough messages for conversation');
+      return null;
+    }
 
-    const lastUserMessage = messages.filter(m => m.role === 'user').pop();
-    const lastAssistantMessage = messages.filter(m => m.role === 'assistant').pop();
+    // Filter and validate messages
+    const userMessages = messages.filter(m => {
+      const isUser = m.role === 'user';
+      const hasContent = m.content && m.content.trim().length > 0;
+      console.log(`[Common] Message role=${m.role}, hasContent=${hasContent}, content=${m.content?.substring(0, 50)}...`);
+      return isUser && hasContent;
+    });
+    
+    const assistantMessages = messages.filter(m => {
+      const isAssistant = m.role === 'assistant';
+      const hasContent = m.content && m.content.trim().length > 0;
+      return isAssistant && hasContent;
+    });
 
-    if (!lastUserMessage || !lastAssistantMessage) return null;
+    console.log(`[Common] Found ${userMessages.length} user messages and ${assistantMessages.length} assistant messages`);
 
-    return {
-      prompt: lastUserMessage.content,
-      response: lastAssistantMessage.content,
+    if (userMessages.length === 0 || assistantMessages.length === 0) {
+      console.log('[Common] Missing user or assistant messages');
+      return null;
+    }
+
+    const lastUserMessage = userMessages[userMessages.length - 1];
+    const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+
+    // Validate content is different (prevent duplicate content issue)
+    if (lastUserMessage.content.trim() === lastAssistantMessage.content.trim()) {
+      console.log('[Common] User and assistant content are identical - skipping');
+      return null;
+    }
+
+    const extractedData = {
+      prompt: lastUserMessage.content.trim(),
+      response: lastAssistantMessage.content.trim(),
       model: this.detectModel(),
       sessionId: this.sessionId,
       conversationLength: messages.length,
       estimatedTokens: this.estimateTokens(lastUserMessage.content + lastAssistantMessage.content)
     };
+    
+    console.log('[Common] Successfully extracted conversation data:', {
+      promptLength: extractedData.prompt.length,
+      responseLength: extractedData.response.length,
+      model: extractedData.model
+    });
+
+    return extractedData;
   }
 
   // Estimate token count (rough approximation)

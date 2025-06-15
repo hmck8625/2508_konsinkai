@@ -123,6 +123,28 @@ const nextConfig = {
 
   // Webpack 設定のカスタマイズ
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Node.js モジュールのブラウザ対応
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        net: false,
+        tls: false,
+        fs: false,
+        child_process: false,
+        dns: false,
+        http2: false,
+        crypto: false,
+        stream: false,
+        buffer: false,
+        util: false,
+        url: false,
+        querystring: false,
+        os: false,
+        path: false,
+        zlib: false,
+      };
+    }
+
     // SVG を React コンポーネントとして読み込み
     config.module.rules.push({
       test: /\.svg$/,

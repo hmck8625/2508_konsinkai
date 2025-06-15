@@ -2,45 +2,151 @@
 class ChatGPTDetector extends LLMContentCommon {
   constructor() {
     super();
-    this.messageSelector = '[data-message-author-role]';
-    this.inputSelector = '#prompt-textarea';
-    this.submitSelector = '[data-testid="send-button"]';
+    // Multiple selectors for different ChatGPT versions
+    this.messageSelectors = [
+      '[data-message-author-role]',
+      '[data-testid^="conversation-turn"]',
+      '.group.w-full.text-token-text-primary',
+      '.group .flex.flex-col.text-sm'
+    ];
+    this.inputSelectors = [
+      '#prompt-textarea',
+      '[data-id="root"] textarea',
+      '.ProseMirror',
+      'textarea[placeholder*="message"]'
+    ];
+    this.submitSelectors = [
+      '[data-testid="send-button"]',
+      'button[aria-label*="Send"]',
+      'button[type="submit"]'
+    ];
     this.observer = null;
     this.lastProcessedCount = 0;
+    this.debugMode = true;
     
-    console.log('ChatGPT Knowledge Hub detector initialized');
+    console.log('ChatGPT Knowledge Hub detector initialized for URL:', window.location.href);
     this.startMonitoring();
   }
 
   getInputElement() {
-    return document.querySelector(this.inputSelector);
+    for (const selector of this.inputSelectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        this.debugLog(`Found input element with selector: ${selector}`);
+        return element;
+      }
+    }
+    this.debugLog('No input element found with any selector');
+    return null;
   }
 
   getSubmitButton() {
-    return document.querySelector(this.submitSelector);
+    for (const selector of this.submitSelectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        this.debugLog(`Found submit button with selector: ${selector}`);
+        return element;
+      }
+    }
+    this.debugLog('No submit button found with any selector');
+    return null;
   }
 
   getMessages() {
-    const messageElements = document.querySelectorAll(this.messageSelector);
-    return Array.from(messageElements).map(element => {
-      const role = element.getAttribute('data-message-author-role');
+    let messageElements = [];
+    let usedSelector = '';
+    
+    // Try each selector until we find messages
+    for (const selector of this.messageSelectors) {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length > 0) {
+        messageElements = Array.from(elements);
+        usedSelector = selector;
+        break;
+      }
+    }
+    
+    this.debugLog(`Found ${messageElements.length} messages using selector: ${usedSelector}`);
+    
+    return messageElements.map((element, index) => {
+      const role = this.detectMessageRole(element, index);
       const content = this.extractMessageContent(element);
+      
+      this.debugLog(`Message ${index}: role=${role}, content=${content.substring(0, 100)}...`);
       
       return {
         role: role,
         content: content,
         element: element
       };
-    });
+    }).filter(msg => msg.content.trim().length > 0);
   }
 
-  extractMessageContent(messageElement) {
-    // ChatGPT message content is usually in a div with prose class
-    const contentElement = messageElement.querySelector('.prose, [class*="prose"]') || 
-                          messageElement.querySelector('div > div > div') ||
-                          messageElement;
+  detectMessageRole(messageElement, index) {
+    // Method 1: Check data-message-author-role attribute
+    const authorRole = messageElement.getAttribute('data-message-author-role');
+    if (authorRole) {
+      this.debugLog(`Role detected from attribute: ${authorRole}`);
+      return authorRole;
+    }
     
-    return contentElement.textContent.trim();
+    // Method 2: Check for user/assistant indicators in classes or content
+    const elementText = messageElement.textContent.toLowerCase();
+    const elementHTML = messageElement.innerHTML.toLowerCase();
+    
+    // Look for avatar or user indicators
+    if (messageElement.querySelector('img[alt*="user"]') || 
+        messageElement.querySelector('[class*="user"]') ||
+        elementHTML.includes('user') && !elementHTML.includes('assistant')) {
+      this.debugLog('Role detected as user from UI indicators');
+      return 'user';
+    }
+    
+    // Look for assistant indicators
+    if (messageElement.querySelector('img[alt*="gpt"]') ||
+        messageElement.querySelector('img[alt*="assistant"]') ||
+        messageElement.querySelector('[class*="assistant"]') ||
+        elementHTML.includes('assistant') ||
+        elementHTML.includes('chatgpt')) {
+      this.debugLog('Role detected as assistant from UI indicators');
+      return 'assistant';
+    }
+    
+    // Method 3: Alternate based on position (first message usually user)
+    const role = index % 2 === 0 ? 'user' : 'assistant';
+    this.debugLog(`Role detected by position: ${role} (index: ${index})`);
+    return role;
+  }
+  
+  extractMessageContent(messageElement) {
+    // Try multiple content extraction methods
+    const contentSelectors = [
+      '.prose',
+      '[class*="prose"]',
+      '.markdown',
+      '[class*="markdown"]',
+      '.whitespace-pre-wrap',
+      'div[data-message-content]',
+      'div:not([class*="avatar"]):not([class*="button"])'
+    ];
+    
+    for (const selector of contentSelectors) {
+      const contentElement = messageElement.querySelector(selector);
+      if (contentElement && contentElement.textContent.trim().length > 0) {
+        this.debugLog(`Content extracted using selector: ${selector}`);
+        return contentElement.textContent.trim();
+      }
+    }
+    
+    // Fallback: get all text but exclude button/meta text
+    const fullText = messageElement.textContent.trim();
+    // Remove common button texts and timestamps
+    const cleanedText = fullText.replace(/^\s*(Copy|Regenerate|Share|Like|Dislike)\s*/gm, '')
+                                .replace(/\d{1,2}:\d{2}\s*(AM|PM)?/g, '')
+                                .trim();
+    
+    this.debugLog(`Content extracted as fallback: ${cleanedText.substring(0, 100)}...`);
+    return cleanedText;
   }
 
   detectModel() {
@@ -90,32 +196,46 @@ class ChatGPTDetector extends LLMContentCommon {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE) {
-          // Check if new message was added
-          if (node.matches && node.matches(this.messageSelector)) {
-            hasNewMessages = true;
-          } else if (node.querySelector && node.querySelector(this.messageSelector)) {
-            hasNewMessages = true;
+          // Check if new message was added using any of our selectors
+          for (const selector of this.messageSelectors) {
+            if ((node.matches && node.matches(selector)) ||
+                (node.querySelector && node.querySelector(selector))) {
+              hasNewMessages = true;
+              this.debugLog(`New message detected with selector: ${selector}`);
+              break;
+            }
           }
+          if (hasNewMessages) break;
         }
       }
+      if (hasNewMessages) break;
     }
 
     if (hasNewMessages) {
+      this.debugLog('Scheduling conversation processing due to new messages');
       this.debounceConversationProcessing(() => {
         this.processCurrentConversation();
       }, 3000); // Wait 3 seconds after last message
     }
   }
 
+  debugLog(message) {
+    if (this.debugMode) {
+      console.log(`[ChatGPT Extractor Debug] ${message}`);
+    }
+  }
+  
   processCurrentConversation() {
+    this.debugLog('Starting conversation processing...');
     const messages = this.getMessages();
     
     // Only process if we have new messages
     if (messages.length <= this.lastProcessedCount) {
+      this.debugLog(`No new messages: ${messages.length} <= ${this.lastProcessedCount}`);
       return;
     }
 
-    console.log(`Processing conversation with ${messages.length} messages`);
+    this.debugLog(`Processing conversation with ${messages.length} messages (last processed: ${this.lastProcessedCount})`);
     this.lastProcessedCount = messages.length;
 
     // Extract conversation data
@@ -127,7 +247,10 @@ class ChatGPTDetector extends LLMContentCommon {
       conversationData.url = window.location.href;
       conversationData.title = this.getConversationTitle();
       
+      this.debugLog(`Extracted conversation data:`, conversationData);
       this.sendConversationToBackground(conversationData);
+    } else {
+      this.debugLog('No valid conversation data extracted');
     }
   }
 

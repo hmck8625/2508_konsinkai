@@ -101,7 +101,7 @@ class ManualCollector extends LLMContentCommon {
 
   detectCurrentPlatform() {
     const url = window.location.href;
-    if (url.includes('chat.openai.com')) return 'chatgpt';
+    if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) return 'chatgpt';
     if (url.includes('claude.ai')) return 'claude';
     if (url.includes('copilot.microsoft.com')) return 'copilot';
     if (url.includes('bard.google.com')) return 'bard';
@@ -184,12 +184,114 @@ class ManualCollector extends LLMContentCommon {
   }
 
   getChatGPTMessages() {
-    const messageElements = document.querySelectorAll('[data-message-author-role]');
-    return Array.from(messageElements).map(element => {
-      const role = element.getAttribute('data-message-author-role');
+    console.log('🔍 ChatGPT: メッセージ取得開始');
+    
+    // 複数のセレクタを試行
+    const selectors = [
+      '[data-message-author-role]',
+      '[data-testid^="conversation-turn-"]',
+      '.group.w-full',
+      '[class*="group"][class*="w-full"]',
+      '.flex.flex-col.items-start',
+      '[role="presentation"] > div'
+    ];
+    
+    let messageElements = [];
+    for (const selector of selectors) {
+      messageElements = document.querySelectorAll(selector);
+      if (messageElements.length > 0) {
+        console.log(`✅ ChatGPT: セレクタ "${selector}" で ${messageElements.length}個の要素を発見`);
+        break;
+      } else {
+        console.log(`❌ ChatGPT: セレクタ "${selector}" では要素が見つからない`);
+      }
+    }
+    
+    if (messageElements.length === 0) {
+      console.warn('⚠️ ChatGPT: メッセージ要素が見つかりません');
+      return [];
+    }
+    
+    const messages = [];
+    Array.from(messageElements).forEach((element, index) => {
+      const role = this.determineChatGPTRole(element, index);
       const content = this.extractTextContent(element);
-      return { role, content, element };
-    }).filter(msg => msg.content.length > 10);
+      
+      if (content.length > 10) {
+        console.log(`📝 ChatGPT Message ${index + 1}:`, {
+          role,
+          contentPreview: content.substring(0, 100) + '...',
+          contentLength: content.length,
+          element: element.tagName + (element.className ? '.' + element.className.split(' ').join('.') : '')
+        });
+        messages.push({ role, content, element, index });
+      } else {
+        console.log(`⏭️ ChatGPT: メッセージ${index + 1}をスキップ（短すぎる: ${content.length}文字）`);
+      }
+    });
+    
+    console.log(`📊 ChatGPT: 合計${messages.length}個のメッセージを取得`);
+    return messages;
+  }
+  
+  determineChatGPTRole(element, index) {
+    // 1. data-message-author-role 属性をチェック
+    const roleAttr = element.getAttribute('data-message-author-role');
+    if (roleAttr) {
+      console.log(`🏷️ ChatGPT: Role属性から判定 "${roleAttr}"`);
+      return roleAttr;
+    }
+    
+    // 2. テストID属性をチェック
+    const testId = element.getAttribute('data-testid');
+    if (testId && testId.includes('user')) {
+      console.log('👤 ChatGPT: TestIDからユーザーと判定');
+      return 'user';
+    }
+    if (testId && testId.includes('assistant')) {
+      console.log('🤖 ChatGPT: TestIDからアシスタントと判定');
+      return 'assistant';
+    }
+    
+    // 3. アバター画像の存在をチェック
+    const hasUserAvatar = element.querySelector('img[alt*="User"], img[alt*="user"], .avatar-user');
+    const hasAssistantAvatar = element.querySelector('img[alt*="ChatGPT"], img[alt*="Assistant"], .avatar-assistant, img[src*="chatgpt"]');
+    
+    if (hasUserAvatar) {
+      console.log('👤 ChatGPT: アバターからユーザーと判定');
+      return 'user';
+    }
+    if (hasAssistantAvatar) {
+      console.log('🤖 ChatGPT: アバターからアシスタントと判定');
+      return 'assistant';
+    }
+    
+    // 4. CSSクラス名をチェック
+    const className = element.className.toLowerCase();
+    if (className.includes('user') || className.includes('human')) {
+      console.log('👤 ChatGPT: クラス名からユーザーと判定');
+      return 'user';
+    }
+    if (className.includes('assistant') || className.includes('bot') || className.includes('ai')) {
+      console.log('🤖 ChatGPT: クラス名からアシスタントと判定');
+      return 'assistant';
+    }
+    
+    // 5. 背景色や位置による判定
+    const computedStyle = window.getComputedStyle(element);
+    const bgColor = computedStyle.backgroundColor;
+    const marginLeft = computedStyle.marginLeft;
+    
+    // ChatGPTでは通常、ユーザーメッセージは右寄せまたは特定の背景色
+    if (marginLeft && parseInt(marginLeft) > 0) {
+      console.log('👤 ChatGPT: マージンからユーザーと判定');
+      return 'user';
+    }
+    
+    // 6. フォールバック: インデックスベース（奇数=user, 偶数=assistant）
+    const role = index % 2 === 0 ? 'user' : 'assistant';
+    console.log(`🔄 ChatGPT: インデックス${index}からフォールバック判定 "${role}"`);
+    return role;
   }
 
   getClaudeMessages() {
@@ -247,24 +349,98 @@ class ManualCollector extends LLMContentCommon {
   }
 
   extractConversationFromMessages(messages) {
-    if (messages.length < 2) return null;
+    console.log('🔄 会話データ抽出開始');
+    console.log(`📊 全メッセージ数: ${messages.length}`);
+    
+    if (messages.length < 2) {
+      console.warn('⚠️ メッセージ数が不足（2未満）');
+      return null;
+    }
+
+    // メッセージを詳細にログ出力
+    messages.forEach((msg, index) => {
+      console.log(`Message ${index + 1}: [${msg.role}] ${msg.content.substring(0, 50)}...`);
+    });
 
     // Get last user message and last assistant message
     const userMessages = messages.filter(m => m.role === 'user');
     const assistantMessages = messages.filter(m => m.role === 'assistant');
 
-    if (userMessages.length === 0 || assistantMessages.length === 0) return null;
+    console.log(`👤 ユーザーメッセージ数: ${userMessages.length}`);
+    console.log(`🤖 アシスタントメッセージ数: ${assistantMessages.length}`);
+
+    if (userMessages.length === 0 || assistantMessages.length === 0) {
+      console.error('❌ ユーザーまたはアシスタントのメッセージが見つかりません');
+      return null;
+    }
 
     const lastUserMessage = userMessages[userMessages.length - 1];
     const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
 
-    return {
+    // 重複チェック
+    if (lastUserMessage.content === lastAssistantMessage.content) {
+      console.error('❌ プロンプトと応答が同じ内容です。ロール判定に問題があります。');
+      console.log('🔍 デバッグ情報:');
+      console.log('Last User:', lastUserMessage);
+      console.log('Last Assistant:', lastAssistantMessage);
+      
+      // より詳細な分析を試行
+      return this.fallbackConversationExtraction(messages);
+    }
+
+    const result = {
       prompt: lastUserMessage.content,
       response: lastAssistantMessage.content,
       conversationLength: messages.length,
       estimatedTokens: this.estimateTokens(lastUserMessage.content + lastAssistantMessage.content),
-      fullConversation: messages.map(m => ({ role: m.role, content: m.content }))
+      fullConversation: messages.map(m => ({ role: m.role, content: m.content, index: m.index })),
+      debugInfo: {
+        userMessagesCount: userMessages.length,
+        assistantMessagesCount: assistantMessages.length,
+        totalMessages: messages.length,
+        lastUserIndex: lastUserMessage.index,
+        lastAssistantIndex: lastAssistantMessage.index
+      }
     };
+
+    console.log('✅ 会話データ抽出完了:');
+    console.log('📝 プロンプト:', result.prompt.substring(0, 100) + '...');
+    console.log('🤖 応答:', result.response.substring(0, 100) + '...');
+    
+    return result;
+  }
+
+  fallbackConversationExtraction(messages) {
+    console.log('🔄 フォールバック抽出を実行');
+    
+    // メッセージの順序を再検討
+    const sortedMessages = messages.sort((a, b) => (a.index || 0) - (b.index || 0));
+    
+    // 最後の2つのメッセージを取得し、強制的に異なるロールを割り当て
+    if (sortedMessages.length >= 2) {
+      const secondLast = sortedMessages[sortedMessages.length - 2];
+      const last = sortedMessages[sortedMessages.length - 1];
+      
+      // 内容が異なる場合のみ使用
+      if (secondLast.content !== last.content) {
+        return {
+          prompt: secondLast.content,
+          response: last.content,
+          conversationLength: messages.length,
+          estimatedTokens: this.estimateTokens(secondLast.content + last.content),
+          fullConversation: messages.map(m => ({ role: m.role, content: m.content, index: m.index })),
+          debugInfo: {
+            extractionMethod: 'fallback',
+            usedSecondLast: true,
+            secondLastRole: secondLast.role,
+            lastRole: last.role
+          }
+        };
+      }
+    }
+    
+    console.error('❌ フォールバック抽出も失敗');
+    return null;
   }
 
   getPageTitle() {
@@ -436,6 +612,16 @@ class ManualCollector extends LLMContentCommon {
   showDetailedToast(data) {
     const toast = document.createElement('div');
     toast.className = 'llm-hub-detailed-toast';
+    
+    const debugInfo = data.debugInfo ? `
+      <div class="toast-debug">
+        <strong>🔍 デバッグ情報:</strong><br>
+        ユーザーメッセージ: ${data.debugInfo.userMessagesCount || 0}個<br>
+        アシスタントメッセージ: ${data.debugInfo.assistantMessagesCount || 0}個<br>
+        ${data.debugInfo.extractionMethod ? `抽出方法: ${data.debugInfo.extractionMethod}<br>` : ''}
+      </div>
+    ` : '';
+    
     toast.innerHTML = `
       <div class="toast-header">
         <span class="toast-title">📊 収集完了</span>
@@ -445,13 +631,17 @@ class ManualCollector extends LLMContentCommon {
         <div class="toast-meta">
           ${this.getPlatformName(this.detectCurrentPlatform())} • ${data.conversationLength || 2}往復
         </div>
+        ${debugInfo}
         <div class="toast-preview">
-          <strong>プロンプト:</strong> ${this.truncateText(data.prompt, 100)}<br>
-          <strong>応答:</strong> ${this.truncateText(data.response, 100)}
+          <strong>プロンプト (${data.prompt?.length || 0}文字):</strong><br>
+          ${this.truncateText(data.prompt, 150)}<br><br>
+          <strong>応答 (${data.response?.length || 0}文字):</strong><br>
+          ${this.truncateText(data.response, 150)}
         </div>
         <div class="toast-actions">
           <button class="toast-btn" id="viewFullToast">詳細を表示</button>
           <button class="toast-btn" id="copyToast">コピー</button>
+          <button class="toast-btn" id="debugToast">デバッグ情報</button>
         </div>
       </div>
     `;
@@ -493,6 +683,11 @@ class ManualCollector extends LLMContentCommon {
         console.error('Copy failed:', err);
       }
       toast.remove();
+    });
+
+    toast.querySelector('#debugToast').addEventListener('click', () => {
+      toast.remove();
+      this.showDebugInfo(data);
     });
 
     // Auto-remove after 10 seconds
@@ -595,6 +790,133 @@ ${data.response}`;
       bard: 'Bard'
     };
     return names[platform] || platform;
+  }
+
+  showDebugInfo(data) {
+    const debug = document.createElement('div');
+    debug.className = 'llm-hub-debug-modal';
+    debug.innerHTML = `
+      <div class="details-overlay">
+        <div class="details-content">
+          <div class="details-header">
+            <h3>🔍 デバッグ情報</h3>
+            <button class="details-close">×</button>
+          </div>
+          <div class="details-body">
+            <div class="debug-section">
+              <h4>📊 基本情報</h4>
+              <div class="debug-info">
+                <p><strong>プラットフォーム:</strong> ${this.getPlatformName(this.detectCurrentPlatform())}</p>
+                <p><strong>URL:</strong> ${window.location.href}</p>
+                <p><strong>収集時刻:</strong> ${data.timestamp || '不明'}</p>
+                <p><strong>会話長:</strong> ${data.conversationLength || 0}メッセージ</p>
+                <p><strong>推定トークン:</strong> ${data.estimatedTokens || 0}</p>
+              </div>
+            </div>
+            
+            ${data.debugInfo ? `
+              <div class="debug-section">
+                <h4>🔍 抽出情報</h4>
+                <div class="debug-info">
+                  <p><strong>ユーザーメッセージ数:</strong> ${data.debugInfo.userMessagesCount || 0}</p>
+                  <p><strong>アシスタントメッセージ数:</strong> ${data.debugInfo.assistantMessagesCount || 0}</p>
+                  <p><strong>総メッセージ数:</strong> ${data.debugInfo.totalMessages || 0}</p>
+                  ${data.debugInfo.extractionMethod ? `<p><strong>抽出方法:</strong> ${data.debugInfo.extractionMethod}</p>` : ''}
+                  ${data.debugInfo.lastUserIndex !== undefined ? `<p><strong>最後のユーザーメッセージ位置:</strong> ${data.debugInfo.lastUserIndex}</p>` : ''}
+                  ${data.debugInfo.lastAssistantIndex !== undefined ? `<p><strong>最後のアシスタントメッセージ位置:</strong> ${data.debugInfo.lastAssistantIndex}</p>` : ''}
+                </div>
+              </div>
+            ` : ''}
+            
+            <div class="debug-section">
+              <h4>💬 完全な会話履歴</h4>
+              <div class="debug-conversation">
+                ${data.fullConversation ? data.fullConversation.map((msg, index) => `
+                  <div class="debug-message ${msg.role}">
+                    <div class="debug-message-header">
+                      <span><strong>${index + 1}. ${msg.role === 'user' ? '👤 ユーザー' : '🤖 アシスタント'}</strong></span>
+                      ${msg.index !== undefined ? `<span class="debug-index">要素位置: ${msg.index}</span>` : ''}
+                    </div>
+                    <div class="debug-message-content">${this.escapeHtml(msg.content)}</div>
+                  </div>
+                `).join('') : '<p>会話履歴がありません</p>'}
+              </div>
+            </div>
+          </div>
+          <div class="details-footer">
+            <button class="details-btn" id="copyDebug">📋 デバッグ情報をコピー</button>
+            <button class="details-btn" id="closeDebug">閉じる</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    debug.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 15000;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+
+    document.body.appendChild(debug);
+
+    // Event listeners
+    const closeModal = () => debug.remove();
+    debug.querySelector('.details-close').addEventListener('click', closeModal);
+    debug.querySelector('#closeDebug').addEventListener('click', closeModal);
+    debug.querySelector('.details-overlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+
+    debug.querySelector('#copyDebug').addEventListener('click', async () => {
+      const debugText = this.generateDebugText(data);
+      try {
+        await navigator.clipboard.writeText(debugText);
+        this.showMessage('デバッグ情報をコピーしました', 'success');
+      } catch (err) {
+        console.error('Copy failed:', err);
+      }
+    });
+  }
+
+  generateDebugText(data) {
+    let text = `=== LLM Knowledge Hub デバッグ情報 ===\n\n`;
+    text += `プラットフォーム: ${this.getPlatformName(this.detectCurrentPlatform())}\n`;
+    text += `URL: ${window.location.href}\n`;
+    text += `収集時刻: ${data.timestamp || '不明'}\n`;
+    text += `会話長: ${data.conversationLength || 0}メッセージ\n`;
+    text += `推定トークン: ${data.estimatedTokens || 0}\n\n`;
+    
+    if (data.debugInfo) {
+      text += `=== 抽出情報 ===\n`;
+      text += `ユーザーメッセージ数: ${data.debugInfo.userMessagesCount || 0}\n`;
+      text += `アシスタントメッセージ数: ${data.debugInfo.assistantMessagesCount || 0}\n`;
+      text += `総メッセージ数: ${data.debugInfo.totalMessages || 0}\n`;
+      if (data.debugInfo.extractionMethod) {
+        text += `抽出方法: ${data.debugInfo.extractionMethod}\n`;
+      }
+      text += `\n`;
+    }
+    
+    text += `=== 抽出されたプロンプト ===\n${data.prompt}\n\n`;
+    text += `=== 抽出された応答 ===\n${data.response}\n\n`;
+    
+    if (data.fullConversation) {
+      text += `=== 完全な会話履歴 ===\n`;
+      data.fullConversation.forEach((msg, index) => {
+        text += `${index + 1}. [${msg.role}] ${msg.content}\n\n`;
+      });
+    }
+    
+    return text;
   }
 }
 
@@ -756,6 +1078,84 @@ animationStyle.textContent = `
   
   .details-btn:hover {
     background: #f0f0f0;
+  }
+
+  .toast-debug {
+    font-size: 11px;
+    color: #666;
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+  }
+
+  .debug-section {
+    margin-bottom: 20px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .debug-section h4 {
+    margin: 0;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .debug-info {
+    padding: 16px;
+  }
+
+  .debug-info p {
+    margin: 4px 0;
+    font-size: 13px;
+  }
+
+  .debug-conversation {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .debug-message {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .debug-message:last-child {
+    border-bottom: none;
+  }
+
+  .debug-message.user {
+    background: #f0f8ff;
+  }
+
+  .debug-message.assistant {
+    background: #faf5ff;
+  }
+
+  .debug-message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+
+  .debug-index {
+    color: #666;
+    font-size: 11px;
+  }
+
+  .debug-message-content {
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 `;
 document.head.appendChild(animationStyle);

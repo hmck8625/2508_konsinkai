@@ -12,15 +12,40 @@ export async function GET(
     
     if (!session?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', code: 'NO_SESSION' },
         { status: 401 }
       );
     }
 
-    const gmailService = new GmailService(session.accessToken);
-    const thread = await gmailService.getThread(params.threadId);
+    // セッションにエラーがある場合は再認証を促す
+    if (session.error === 'RefreshAccessTokenError') {
+      return NextResponse.json(
+        { 
+          error: 'Token refresh failed. Please re-authenticate.',
+          code: 'TOKEN_REFRESH_FAILED'
+        },
+        { status: 401 }
+      );
+    }
 
-    return NextResponse.json({ thread });
+    const gmailService = new GmailService(session.accessToken, session.user?.email || 'default');
+    
+    try {
+      const thread = await gmailService.getThread(params.threadId);
+      return NextResponse.json({ thread });
+    } catch (gmailError: any) {
+      // Gmail APIからのトークンエラーを検知
+      if (gmailError?.message === 'TOKEN_EXPIRED') {
+        return NextResponse.json(
+          { 
+            error: 'Access token expired. Please re-authenticate.',
+            code: 'TOKEN_EXPIRED'
+          },
+          { status: 401 }
+        );
+      }
+      throw gmailError;
+    }
   } catch (error) {
     console.error('Gmail thread詳細API エラー:', error);
     return NextResponse.json(

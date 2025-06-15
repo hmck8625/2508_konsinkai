@@ -1,31 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { GmailService } from '@/lib/gmail';
+import { withAuth } from '@/lib/auth-middleware';
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, session: any) => {
   try {
-    const session = await getServerSession(authOptions);
+    console.log('📧 Gmail threads API called');
+    console.log('Session available:', !!session);
+    console.log('Access token available:', !!session?.accessToken);
     
-    if (!session?.accessToken) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const influencerEmail = searchParams.get('email');
+    
+    console.log('Influencer email filter:', influencerEmail);
 
-    const gmailService = new GmailService(session.accessToken);
+    const gmailService = new GmailService(session.accessToken, session.user?.email || 'default');
+    console.log('Gmail service created');
+    
     const threads = await gmailService.getInfluencerThreads(influencerEmail || undefined);
+    console.log('Threads fetched successfully:', threads?.length || 0);
 
     return NextResponse.json({ threads });
-  } catch (error) {
-    console.error('Gmail threads API エラー:', error);
+  } catch (error: any) {
+    console.error('❌ Gmail threads API error:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+      response: error?.response?.data,
+      status: error?.response?.status
+    });
+    
     return NextResponse.json(
-      { error: 'Failed to fetch email threads' },
+      { 
+        error: 'Failed to fetch Gmail threads',
+        details: error?.message || 'Unknown error'
+      },
       { status: 500 }
     );
   }
-}
+});

@@ -16,9 +16,15 @@ from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 from dataclasses import dataclass
 
-import vertexai
-from vertexai.language_models import TextGenerationModel, ChatModel
-from vertexai.generative_models import GenerativeModel
+try:
+    import vertexai
+    from vertexai.language_models import TextGenerationModel, ChatModel
+    from vertexai.generative_models import GenerativeModel
+    VERTEX_AVAILABLE = True
+except ImportError:
+    VERTEX_AVAILABLE = False
+
+import google.generativeai as genai
 import google.auth
 from google.oauth2 import service_account
 
@@ -77,50 +83,88 @@ class BaseAgent(ABC):
         """
         self.config = config
         self.model = None
-        self._initialize_vertex_ai()
-        self._initialize_model()
+        self.use_vertex = False
+        self._initialize_ai()
         
         logger.info(f"🤖 Initialized agent: {self.config.name}")
     
-    def _initialize_vertex_ai(self) -> None:
-        """Vertex AI の初期化"""
+    def _initialize_ai(self) -> None:
+        """AI サービスの初期化（Vertex AI または Gemini API）"""
         try:
-            # 認証設定
-            if settings.GOOGLE_APPLICATION_CREDENTIALS and settings.is_development:
-                credentials = service_account.Credentials.from_service_account_file(
-                    settings.GOOGLE_APPLICATION_CREDENTIALS
-                )
-                vertexai.init(
-                    project=settings.GOOGLE_CLOUD_PROJECT_ID,
-                    location=settings.GOOGLE_CLOUD_REGION,
-                    credentials=credentials
-                )
-            else:
-                vertexai.init(
-                    project=settings.GOOGLE_CLOUD_PROJECT_ID,
-                    location=settings.GOOGLE_CLOUD_REGION
-                )
+            # まずVertex AI を試行
+            if VERTEX_AVAILABLE:
+                try:
+                    self._initialize_vertex_ai()
+                    self._initialize_vertex_model()
+                    self.use_vertex = True
+                    logger.info("✅ Using Vertex AI")
+                    return
+                except Exception as e:
+                    logger.warning(f"⚠️ Vertex AI failed, falling back to Gemini API: {e}")
             
-            logger.info("✅ Vertex AI initialized successfully")
+            # Gemini API を使用
+            self._initialize_gemini_api()
+            logger.info("✅ Using Gemini API")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Vertex AI: {e}")
+            logger.error(f"❌ Failed to initialize AI services: {e}")
             raise
     
-    def _initialize_model(self) -> None:
-        """言語モデルの初期化"""
-        try:
-            # Gemini モデルを使用
-            self.model = GenerativeModel(
-                model_name=self.config.model_name,
-                system_instruction=self.config.system_instruction,
+    def _initialize_vertex_ai(self) -> None:
+        """Vertex AI の初期化"""
+        # 認証設定
+        if settings.GOOGLE_APPLICATION_CREDENTIALS and settings.is_development:
+            credentials = service_account.Credentials.from_service_account_file(
+                settings.GOOGLE_APPLICATION_CREDENTIALS
             )
-            
-            logger.info(f"✅ Model {self.config.model_name} initialized")
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize model: {e}")
-            raise
+            vertexai.init(
+                project=settings.GOOGLE_CLOUD_PROJECT_ID,
+                location=settings.GOOGLE_CLOUD_REGION,
+                credentials=credentials
+            )
+        else:
+            vertexai.init(
+                project=settings.GOOGLE_CLOUD_PROJECT_ID,
+                location=settings.GOOGLE_CLOUD_REGION
+            )
+    
+    def _initialize_vertex_model(self) -> None:
+        """Vertex AI モデルの初期化"""
+        self.model = GenerativeModel(
+            model_name=self.config.model_name,
+            system_instruction=self.config.system_instruction,
+        )
+        logger.info(f"✅ Vertex AI Model {self.config.model_name} initialized")
+    
+    def _initialize_gemini_api(self) -> None:
+        """Gemini API の初期化"""
+        # API キー設定
+        api_key = getattr(settings, 'GEMINI_API_KEY', None)
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not found in settings")
+        
+        genai.configure(api_key=api_key)
+        
+        # モデル名をGemini API用に変換
+        model_name = self.config.model_name
+        if model_name.startswith('gemini-1.5-pro'):
+            model_name = 'gemini-1.5-pro'
+        elif model_name.startswith('gemini-1.5-flash'):
+            model_name = 'gemini-1.5-flash'
+        
+        generation_config = {
+            "temperature": self.config.temperature,
+            "top_p": self.config.top_p,
+            "top_k": self.config.top_k,
+            "max_output_tokens": self.config.max_output_tokens,
+        }
+        
+        self.model = genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=generation_config,
+            system_instruction=self.config.system_instruction
+        )
+        logger.info(f"✅ Gemini API Model {model_name} initialized")
     
     async def generate_response(
         self,
@@ -154,14 +198,22 @@ class BaseAgent(ABC):
             # AI生成実行
             logger.info(f"🤖 Generating response with {self.config.name}")
             
-            response = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                lambda: self.model.generate_content(
-                    formatted_prompt,
-                    generation_config=generation_config,
-                    safety_settings=self.config.safety_settings
+            if self.use_vertex:
+                # Vertex AI使用
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: self.model.generate_content(
+                        formatted_prompt,
+                        generation_config=generation_config,
+                        safety_settings=self.config.safety_settings
+                    )
                 )
-            )
+            else:
+                # Gemini API使用
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: self.model.generate_content(formatted_prompt)
+                )
             
             # レスポンス処理
             result = await self._process_response(response, context)

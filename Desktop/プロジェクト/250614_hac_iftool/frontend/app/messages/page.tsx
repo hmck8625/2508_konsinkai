@@ -2,15 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { EmailThread, GmailMessage } from '@/lib/gmail';
 import { ErrorBoundary, useErrorHandler } from '@/components/error-boundary';
 import { AuthGuard, UserInfo } from '@/components/auth-guard';
+import { useAuthError } from '@/hooks/use-auth-error';
+import { AttachmentDisplay } from '@/components/attachment-display';
+import { AttachmentUpload } from '@/components/attachment-upload';
+import { EmailSearch } from '@/components/email-search';
+import { NotificationManager } from '@/components/notification-manager';
+import { useRealtimeGmail } from '@/hooks/use-realtime-gmail';
+import { SearchFilters } from '@/lib/gmail';
 
 export default function MessagesPage() {
+  const searchParams = useSearchParams();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const handleError = useErrorHandler();
+  const { handleApiResponse, isAuthenticated: authStatus } = useAuthError();
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [threads, setThreads] = useState<EmailThread[]>([]);
   const [currentThread, setCurrentThread] = useState<EmailThread | null>(null);
@@ -21,10 +31,51 @@ export default function MessagesPage() {
   const [replyPatterns, setReplyPatterns] = useState<any[]>([]);
   const [isGeneratingPatterns, setIsGeneratingPatterns] = useState(false);
   const [threadAnalysis, setThreadAnalysis] = useState<any>(null);
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
+  
+  // 新規メール作成用の状態
+  const [isComposingNew, setIsComposingNew] = useState(false);
+  const [newEmailTo, setNewEmailTo] = useState('');
+  const [newEmailSubject, setNewEmailSubject] = useState('');
+  const [newEmailBody, setNewEmailBody] = useState('');
+  const [isSendingNewEmail, setIsSendingNewEmail] = useState(false);
+  
+  // リアルタイムGmail機能
+  const {
+    threads: realtimeThreads,
+    isLoading: isRealtimeLoading,
+    lastUpdated,
+    newThreadsCount,
+    refresh: refreshRealtime,
+    resetNewCount,
+    isPolling,
+    startPolling,
+    stopPolling,
+  } = useRealtimeGmail(threads, {
+    pollInterval: 30000, // 30秒間隔
+    enableNotifications: true,
+    autoRefresh: true,
+  });
 
   useEffect(() => {
     setIsVisible(true);
     checkAuth();
+
+    // URLパラメータからコラボ提案情報を取得
+    const to = searchParams.get('to');
+    const subject = searchParams.get('subject');
+    const body = searchParams.get('body');
+    const influencer = searchParams.get('influencer');
+    
+    if (to || subject || body) {
+      setIsComposingNew(true);
+      setNewEmailTo(to || '');
+      setNewEmailSubject(subject || '');
+      setNewEmailBody(body || '');
+    }
 
     // Chrome拡張機能のエラーをキャッチ
     const handleGlobalError = (event: ErrorEvent) => {
@@ -51,13 +102,20 @@ export default function MessagesPage() {
       window.removeEventListener('error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     if (isAuthenticated) {
       loadThreads();
     }
   }, [isAuthenticated]);
+  
+  // リアルタイムスレッドが更新されたらローカル状態も更新
+  useEffect(() => {
+    if (realtimeThreads.length > 0) {
+      setThreads(realtimeThreads);
+    }
+  }, [realtimeThreads]);
 
   useEffect(() => {
     if (selectedThread) {
@@ -73,9 +131,27 @@ export default function MessagesPage() {
 
   const checkAuth = async () => {
     try {
+      console.log('🔐 Checking authentication...');
       const response = await fetch('/api/auth/session');
       const session = await response.json();
-      setIsAuthenticated(!!session?.user);
+      
+      console.log('Session response:', {
+        hasUser: !!session?.user,
+        userEmail: session?.user?.email,
+        hasAccessToken: !!session?.accessToken,
+        expires: session?.expires
+      });
+      
+      const authenticated = !!(session?.user && session?.accessToken);
+      setIsAuthenticated(authenticated);
+      
+      console.log('Authentication status:', authenticated);
+      
+      if (authenticated) {
+        console.log('✅ User is authenticated, will load threads');
+      } else {
+        console.log('❌ User is not authenticated');
+      }
     } catch (error) {
       console.error('認証確認エラー:', error);
       setIsAuthenticated(false);
@@ -85,14 +161,57 @@ export default function MessagesPage() {
   };
 
   const loadThreads = async () => {
+    console.log('📧 loadThreads called');
+    console.log('isAuthenticated:', isAuthenticated);
+    
+    if (!isAuthenticated) {
+      console.log('⚠️ Not authenticated, skipping thread loading');
+      return;
+    }
+    
     setIsLoadingThreads(true);
     try {
-      const response = await fetch('/api/gmail/threads');
+      let url = '/api/gmail/threads';
+      
+      // 検索フィルタがある場合は検索APIを使用
+      if (Object.keys(searchFilters).length > 0) {
+        const params = new URLSearchParams();
+        
+        Object.entries(searchFilters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            if (value instanceof Date) {
+              params.append(key, value.toISOString().split('T')[0]);
+            } else if (Array.isArray(value)) {
+              params.append(key, value.join(','));
+            } else {
+              params.append(key, value.toString());
+            }
+          }
+        });
+        
+        url = `/api/gmail/search?${params.toString()}`;
+      }
+      
+      console.log('Making request to:', url);
+      const response = await fetch(url);
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
+      // 認証エラーをチェック
+      const authErrorHandled = await handleApiResponse(response);
+      if (authErrorHandled) {
+        console.log('Auth error handled, stopping');
+        return;
+      }
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Threads data received:', data);
         setThreads(data.threads || []);
       } else {
-        console.warn('Failed to load threads:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.warn('Failed to load threads:', response.status, response.statusText, errorText);
       }
     } catch (error) {
       handleError(error);
@@ -101,10 +220,30 @@ export default function MessagesPage() {
       setIsLoadingThreads(false);
     }
   };
+  
+  // 検索実行
+  const handleSearch = (filters: SearchFilters) => {
+    setSearchFilters(filters);
+    setShowSearch(false);
+    loadThreads();
+  };
+  
+  // 検索クリア
+  const handleClearSearch = () => {
+    setSearchFilters({});
+    loadThreads();
+  };
 
   const loadThreadDetails = async (threadId: string) => {
     try {
       const response = await fetch(`/api/gmail/threads/${threadId}`);
+      
+      // 認証エラーをチェック
+      const authErrorHandled = await handleApiResponse(response);
+      if (authErrorHandled) {
+        return;
+      }
+      
       if (response.ok) {
         const data = await response.json();
         setCurrentThread(data.thread);
@@ -179,6 +318,57 @@ export default function MessagesPage() {
     }
   };
 
+  const handleSendNewEmail = async () => {
+    if (!newEmailTo.trim() || !newEmailSubject.trim() || !newEmailBody.trim()) {
+      alert('宛先、件名、本文をすべて入力してください');
+      return;
+    }
+
+    setIsSendingNewEmail(true);
+    try {
+      const response = await fetch('/api/gmail/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: newEmailTo,
+          subject: newEmailSubject,
+          message: newEmailBody,
+        }),
+      });
+
+      // 認証エラーをチェック
+      const authErrorHandled = await handleApiResponse(response);
+      if (authErrorHandled) {
+        setIsSendingNewEmail(false);
+        return;
+      }
+
+      if (response.ok) {
+        alert('メールが正常に送信されました！');
+        
+        // フォームをリセット
+        setNewEmailTo('');
+        setNewEmailSubject('');
+        setNewEmailBody('');
+        setIsComposingNew(false);
+        
+        // スレッド一覧を更新
+        await loadThreads();
+      } else {
+        const errorData = await response.json();
+        console.error('送信エラー:', errorData);
+        alert(`メール送信に失敗しました: ${errorData.error || '不明なエラー'}`);
+      }
+    } catch (error) {
+      console.error('メール送信エラー:', error);
+      alert('メール送信中にエラーが発生しました');
+    } finally {
+      setIsSendingNewEmail(false);
+    }
+  };
+
   const handleSendReply = async () => {
     if (!replyText.trim() || !currentThread) return;
 
@@ -188,26 +378,66 @@ export default function MessagesPage() {
       const fromHeader = getHeader(lastMessage, 'from');
       const subjectHeader = getHeader(lastMessage, 'subject');
       
-      const response = await fetch('/api/gmail/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: fromHeader,
-          subject: subjectHeader.startsWith('Re:') ? subjectHeader : `Re: ${subjectHeader}`,
-          message: replyText,
-          threadId: currentThread.id,
-        }),
-      });
-
-      if (response.ok) {
-        setReplyText('');
-        alert('メールを送信しました');
-        // スレッドを再読み込み
-        await loadThreadDetails(currentThread.id);
+      // 添付ファイルがある場合はFormDataを使用
+      if (attachmentFiles.length > 0) {
+        const formData = new FormData();
+        formData.append('to', fromHeader);
+        formData.append('subject', subjectHeader.startsWith('Re:') ? subjectHeader : `Re: ${subjectHeader}`);
+        formData.append('message', replyText);
+        formData.append('threadId', currentThread.id);
+        
+        // 添付ファイルを追加
+        attachmentFiles.forEach((file, index) => {
+          formData.append(`attachment_${index}`, file);
+        });
+        
+        const response = await fetch('/api/gmail/send-with-attachments', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        // 認証エラーをチェック
+        const authErrorHandled = await handleApiResponse(response);
+        if (authErrorHandled) {
+          return;
+        }
+        
+        if (response.ok) {
+          setReplyText('');
+          setAttachmentFiles([]);
+          alert('メールを送信しました');
+          await loadThreadDetails(currentThread.id);
+        } else {
+          alert('メール送信に失敗しました');
+        }
       } else {
-        alert('メール送信に失敗しました');
+        // 添付ファイルなしの場合は既存のAPIを使用
+        const response = await fetch('/api/gmail/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: fromHeader,
+            subject: subjectHeader.startsWith('Re:') ? subjectHeader : `Re: ${subjectHeader}`,
+            message: replyText,
+            threadId: currentThread.id,
+          }),
+        });
+
+        // 認証エラーをチェック
+        const authErrorHandled = await handleApiResponse(response);
+        if (authErrorHandled) {
+          return;
+        }
+
+        if (response.ok) {
+          setReplyText('');
+          alert('メールを送信しました');
+          await loadThreadDetails(currentThread.id);
+        } else {
+          alert('メール送信に失敗しました');
+        }
       }
     } catch (error) {
       console.error('送信エラー:', error);
@@ -383,10 +613,177 @@ export default function MessagesPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* 新規メール作成エリア */}
+            {isComposingNew && (
+              <div className="col-span-1 lg:col-span-3 mb-8">
+                <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 border border-green-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-green-800 flex items-center gap-2">
+                      ✉️ AI生成コラボ提案メール
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setIsComposingNew(false);
+                        setNewEmailTo('');
+                        setNewEmailSubject('');
+                        setNewEmailBody('');
+                      }}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">宛先</label>
+                      <input
+                        type="email"
+                        value={newEmailTo}
+                        onChange={(e) => setNewEmailTo(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="例: influencer@example.com"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">件名</label>
+                      <input
+                        type="text"
+                        value={newEmailSubject}
+                        onChange={(e) => setNewEmailSubject(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="件名を入力..."
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">本文</label>
+                      <textarea
+                        value={newEmailBody}
+                        onChange={(e) => setNewEmailBody(e.target.value)}
+                        rows={12}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                        placeholder="メッセージを入力..."
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-green-700 bg-green-100 px-3 py-2 rounded-lg">
+                        💡 このメッセージはAIがあなたの商材情報に基づいて生成しました
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => {
+                            setIsComposingNew(false);
+                            setNewEmailTo('');
+                            setNewEmailSubject('');
+                            setNewEmailBody('');
+                          }}
+                          className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                        >
+                          キャンセル
+                        </button>
+                        <button
+                          onClick={handleSendNewEmail}
+                          disabled={!newEmailTo || !newEmailSubject || !newEmailBody || isSendingNewEmail}
+                          className="bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:from-green-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {isSendingNewEmail ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              送信中...
+                            </>
+                          ) : (
+                            <>
+                              📤 送信
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 検索エリア */}
+            {showSearch && (
+              <div className="col-span-1 lg:col-span-3 mb-8">
+                <EmailSearch 
+                  onSearch={handleSearch}
+                  onClear={handleClearSearch}
+                  isLoading={isLoadingThreads}
+                />
+              </div>
+            )}
+            
+            {/* 通知エリア */}
+            {showNotifications && (
+              <div className="col-span-1 lg:col-span-3 mb-8">
+                <NotificationManager />
+              </div>
+            )}
+            
             {/* スレッド一覧 */}
             <div className="lg:col-span-1">
               <div className="card">
                 <div className="p-6 border-b border-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      📧 メールスレッド
+                      {newThreadsCount > 0 && (
+                        <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                          +{newThreadsCount}
+                        </span>
+                      )}
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      {lastUpdated && (
+                        <span className="text-xs text-gray-500">
+                          最終更新: {lastUpdated.toLocaleTimeString()}
+                        </span>
+                      )}
+                      <div className={`w-2 h-2 rounded-full ${
+                        isPolling ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                      }`} title={isPolling ? 'リアルタイム更新中' : '停止中'} />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3 mb-4">
+                    <button
+                      onClick={() => setShowSearch(!showSearch)}
+                      className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 ${
+                        showSearch 
+                          ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' 
+                          : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
+                      }`}
+                    >
+                      🔍 高度検索
+                    </button>
+                    <button
+                      onClick={() => setShowNotifications(!showNotifications)}
+                      className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 ${
+                        showNotifications 
+                          ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg' 
+                          : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
+                      }`}
+                    >
+                      🔔 通知設定
+                    </button>
+                    <button
+                      onClick={() => {
+                        refreshRealtime();
+                        resetNewCount();
+                      }}
+                      disabled={isRealtimeLoading}
+                      className="btn btn-outline text-sm flex items-center gap-1"
+                    >
+                      {isRealtimeLoading ? '🔄' : '♾️'} 更新
+                    </button>
+                  </div>
+                  
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-bold text-gray-900">Gmail スレッド</h2>
                     <div className="flex items-center space-x-2">
@@ -532,6 +929,14 @@ export default function MessagesPage() {
                               __html: getEmailBody(message)
                             }}
                           />
+                          
+                          {/* 添付ファイル表示 */}
+                          {message.attachments && message.attachments.length > 0 && (
+                            <AttachmentDisplay 
+                              attachments={message.attachments} 
+                              messageId={message.id}
+                            />
+                          )}
                         </div>
                       </div>
                     ))}
@@ -552,6 +957,15 @@ export default function MessagesPage() {
                         placeholder="返信メッセージを入力してください..."
                         className="input bg-white"
                         rows={4}
+                      />
+                    </div>
+                    
+                    {/* 添付ファイルアップロード */}
+                    <div className="mb-4">
+                      <AttachmentUpload 
+                        onFilesChange={setAttachmentFiles}
+                        maxFiles={5}
+                        maxFileSize={25}
                       />
                     </div>
                     <div className="flex justify-between items-center">

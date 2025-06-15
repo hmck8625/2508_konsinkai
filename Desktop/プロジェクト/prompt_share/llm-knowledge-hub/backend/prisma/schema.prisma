@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -34,15 +34,15 @@ model Prompt {
   id              String     @id @default(cuid())
   userId          String
   title           String
-  content         String     @db.Text
-  response        String?    @db.Text
+  content         String
+  response        String?
   llmModel        String?
   category        String
   subcategory     String?
-  difficulty      Difficulty @default(BEGINNER)
-  tags            Json?
+  difficulty      String @default("BEGINNER")
+  tags            String?
   qualityScore    Float?
-  visibility      Visibility @default(PUBLIC)
+  visibility      String @default("PUBLIC")
   usageCount      Int        @default(0)
   averageRating   Float?
   totalRatings    Int        @default(0)
@@ -70,8 +70,8 @@ model Rating {
   easeOfUse      Int
   resultQuality  Int
   timeSaved      Int?
-  comment        String?  @db.Text
-  improvements   String?  @db.Text
+  comment        String?
+  improvements   String?
   createdAt      DateTime @default(now())
 
   // リレーション
@@ -86,9 +86,9 @@ model Rating {
 model Template {
   id              String   @id @default(cuid())
   promptId        String
-  templateContent String   @db.Text
-  variables       Json
-  usageGuide      String?  @db.Text
+  templateContent String
+  variables       String
+  usageGuide      String?
   usageCount      Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -105,7 +105,7 @@ model UsageLog {
   id            String      @id @default(cuid())
   userId        String
   promptId      String
-  executionType ExecutionType
+  executionType String
   timeSaved     Int?
   createdAt     DateTime    @default(now())
 
@@ -121,7 +121,7 @@ model TemplateUsageLog {
   id            String   @id @default(cuid())
   templateId    String
   userId        String
-  variables     Json
+  variables     String
   timeSaved     Int?
   createdAt     DateTime @default(now())
 
@@ -136,7 +136,7 @@ model Collection {
   id          String   @id @default(cuid())
   userId      String
   name        String
-  description String?  @db.Text
+  description String?
   isPublic    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -168,7 +168,7 @@ model Comment {
   id        String   @id @default(cuid())
   promptId  String
   userId    String
-  content   String   @db.Text
+  content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -198,38 +198,23 @@ model ConversationData {
   userId          String
   platform        String
   model           String?
-  prompt          String   @db.Text
-  response        String   @db.Text
+  prompt          String
+  response        String
   tokensUsed      Int?
   responseTime    Float?
   url             String?
   tabTitle        String?
   userDepartment  String?
   detectedCategory String?
-  autoTags        Json?
-  metadata        Json?
+  autoTags        String?
+  metadata        String?
   processed       Boolean  @default(false)
   createdAt       DateTime @default(now())
   
   @@map("conversation_data")
 }
 
-// Enum定義
-enum Difficulty {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-}
-
-enum Visibility {
-  PUBLIC
-  DEPARTMENT
-  PRIVATE
-}
-
-enum ExecutionType {
-  PREVIEW
-  COPY
-  SEND
-  TEMPLATE
-}
+// Enum定義 (SQLiteでは文字列として格納)
+// Difficulty: "BEGINNER", "INTERMEDIATE", "ADVANCED"
+// Visibility: "PUBLIC", "DEPARTMENT", "PRIVATE"  
+// ExecutionType: "PREVIEW", "COPY", "SEND", "TEMPLATE"
