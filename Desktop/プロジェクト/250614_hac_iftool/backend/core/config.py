@@ -12,7 +12,7 @@ import os
 from datetime import datetime
 from functools import lru_cache
 from typing import List, Optional, Union
-from pydantic import BaseSettings, Field, validator
+from pydantic import Field, validator
 from pydantic_settings import BaseSettings
 
 
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # -----------------------------------------------------------------------------
     # Google Cloud 設定
     # -----------------------------------------------------------------------------
-    GOOGLE_CLOUD_PROJECT_ID: str = Field(..., description="Google Cloud プロジェクトID")
+    GOOGLE_CLOUD_PROJECT_ID: Optional[str] = Field(default="hackathon-462905", description="Google Cloud プロジェクトID")
     GOOGLE_CLOUD_REGION: str = Field(default="asia-northeast1", description="Google Cloud リージョン")
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = Field(default=None, description="サービスアカウントキーファイルパス")
     
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
         default="https://asia-northeast1-aiplatform.googleapis.com",
         description="Vertex AI エンドポイント"
     )
-    AGENTSPACE_PROJECT_ID: str = Field(..., description="Google Agentspace プロジェクトID")
+    AGENTSPACE_PROJECT_ID: Optional[str] = Field(default="hackathon-462905", description="Google Agentspace プロジェクトID")
     AGENTSPACE_LOCATION: str = Field(default="asia-northeast1", description="Agentspace ロケーション")
     
     # Gemini API 設定
@@ -72,12 +72,12 @@ class Settings(BaseSettings):
     # 外部API設定
     # -----------------------------------------------------------------------------
     # YouTube Data API
-    YOUTUBE_API_KEY: str = Field(..., description="YouTube Data API キー")
+    YOUTUBE_API_KEY: Optional[str] = Field(default=None, description="YouTube Data API キー")
     YOUTUBE_QUOTA_LIMIT: int = Field(default=10000, description="YouTube API 1日あたりクォータ上限")
     YOUTUBE_RATE_LIMIT_PER_SECOND: int = Field(default=10, description="YouTube API 秒あたりリクエスト制限")
     
     # SendGrid（メール送信）
-    SENDGRID_API_KEY: str = Field(..., description="SendGrid API キー")
+    SENDGRID_API_KEY: Optional[str] = Field(default=None, description="SendGrid API キー")
     FROM_EMAIL: str = Field(default="noreply@infumatch.com", description="送信者メールアドレス")
     FROM_NAME: str = Field(default="InfuMatch Team", description="送信者名")
     
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     # セキュリティ設定
     # -----------------------------------------------------------------------------
     # JWT設定
-    JWT_SECRET_KEY: str = Field(..., description="JWT シークレットキー")
+    JWT_SECRET_KEY: Optional[str] = Field(default="development-secret-key", description="JWT シークレットキー")
     JWT_ALGORITHM: str = Field(default="HS256", description="JWT アルゴリズム")
     JWT_EXPIRY: int = Field(default=3600, description="JWT 有効期限（秒）")
     

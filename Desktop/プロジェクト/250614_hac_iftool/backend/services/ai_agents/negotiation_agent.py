@@ -28,7 +28,7 @@ class NegotiationAgent(BaseAgent):
     インフルエンサーとの交渉プロセスを自動化
     """
     
-    def __init__(self):
+    def __init__(self, settings: Optional[Dict] = None):
         """交渉エージェントの初期化"""
         config = AgentConfig(
             name="NegotiationAgent",
@@ -39,7 +39,11 @@ class NegotiationAgent(BaseAgent):
         )
         super().__init__(config)
         
-        # 人格設定
+        # 設定データを保存
+        self.settings = settings or {}
+        self._update_persona_from_settings()
+        
+        # 人格設定（デフォルト）
         self.persona = {
             "name": "田中美咲",
             "role": "インフルエンサーマーケティング担当",
@@ -58,15 +62,48 @@ class NegotiationAgent(BaseAgent):
             }
         }
     
+    def _update_persona_from_settings(self):
+        """設定データに基づいてペルソナを更新"""
+        if not self.settings:
+            return
+            
+        # 企業情報を更新
+        if self.settings.get('companyName'):
+            self.persona['company'] = self.settings['companyName']
+        
+        if self.settings.get('contactPerson'):
+            self.persona['name'] = self.settings['contactPerson']
+            
+        # 交渉設定を反映
+        negotiation_settings = self.settings.get('negotiationSettings', {})
+        if negotiation_settings:
+            # 交渉トーンを反映
+            tone = negotiation_settings.get('negotiationTone', 'friendly')
+            if tone == 'professional':
+                self.persona['communication_style']['formality'] = 'formal_polite'
+                self.persona['communication_style']['emoji_frequency'] = 0.05
+            elif tone == 'assertive':
+                self.persona['communication_style']['formality'] = 'direct'
+                self.persona['communication_style']['emoji_frequency'] = 0.02
+            
+            # 特別指示を保存
+            self.special_instructions = negotiation_settings.get('specialInstructions', '')
+            self.key_priorities = negotiation_settings.get('keyPriorities', [])
+            self.avoid_topics = negotiation_settings.get('avoidTopics', [])
+            self.budget_range = negotiation_settings.get('defaultBudgetRange', {})
+    
     def _get_system_instruction(self) -> str:
         """システムインストラクションを取得"""
-        return """
-あなたは田中美咲という、インフルエンサーマーケティング担当者です。
+        company_name = self.persona.get('company', '株式会社InfuMatch')
+        person_name = self.persona.get('name', '田中美咲')
+        
+        base_instruction = f"""
+あなたは{person_name}という、インフルエンサーマーケティング担当者です。
 
 ## あなたの人物像
-- 名前: 田中美咲（28歳）
+- 名前: {person_name}（28歳）
 - 職種: インフルエンサーマーケティング担当
-- 会社: 株式会社InfuMatch
+- 会社: {company_name}
 - 経験: 前職は大手PR会社で3年間勤務
 
 ## 性格・特徴
@@ -97,6 +134,26 @@ class NegotiationAgent(BaseAgent):
 - AI特有の硬い表現
 - 過度に丁寧すぎる敬語
 """
+        
+        # 設定から追加の指示を追加
+        if hasattr(self, 'special_instructions') and self.special_instructions:
+            base_instruction += f"\n## 特別な指示\n{self.special_instructions}\n"
+            
+        if hasattr(self, 'key_priorities') and self.key_priorities:
+            priorities_text = "、".join(self.key_priorities)
+            base_instruction += f"\n## 交渉で重視すべきポイント\n{priorities_text}\n"
+            
+        if hasattr(self, 'avoid_topics') and self.avoid_topics:
+            avoid_text = "、".join(self.avoid_topics)
+            base_instruction += f"\n## 避けるべきトピック\n{avoid_text}\n"
+            
+        if hasattr(self, 'budget_range') and self.budget_range:
+            min_budget = self.budget_range.get('min', 0)
+            max_budget = self.budget_range.get('max', 0)
+            if min_budget > 0 and max_budget > 0:
+                base_instruction += f"\n## 予算範囲\n{min_budget:,}円 〜 {max_budget:,}円\n"
+        
+        return base_instruction
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -117,6 +174,8 @@ class NegotiationAgent(BaseAgent):
                 return await self.continue_negotiation(input_data)
             elif action == "price_negotiation":
                 return await self.negotiate_price(input_data)
+            elif action == "generate_reply_patterns":
+                return await self.generate_reply_patterns(input_data)
             else:
                 return {
                     "success": False,
@@ -327,6 +386,381 @@ class NegotiationAgent(BaseAgent):
                 "error": str(e)
             }
     
+    async def generate_reply_patterns(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        返信パターンを複数生成
+        
+        Args:
+            data: メールスレッド情報
+            
+        Returns:
+            Dict: 複数の返信パターン
+        """
+        try:
+            email_thread = data.get("email_thread", {})
+            thread_messages = data.get("thread_messages", [])
+            context = data.get("context", {})
+            
+            logger.info(f"🤖 Generating reply patterns for thread: {email_thread.get('id', 'unknown')}")
+            
+            # スレッドの分析
+            thread_analysis = self._analyze_email_thread(thread_messages)
+            
+            # 返信パターンを生成
+            patterns = []
+            
+            # パターン1: 友好的・積極的
+            friendly_pattern = await self._generate_single_reply_pattern(
+                thread_messages, 
+                "friendly_enthusiastic",
+                thread_analysis
+            )
+            if friendly_pattern:
+                patterns.append(friendly_pattern)
+            
+            # パターン2: 控えめ・慎重
+            cautious_pattern = await self._generate_single_reply_pattern(
+                thread_messages,
+                "cautious_professional", 
+                thread_analysis
+            )
+            if cautious_pattern:
+                patterns.append(cautious_pattern)
+            
+            # パターン3: 価格重視・ビジネス的
+            business_pattern = await self._generate_single_reply_pattern(
+                thread_messages,
+                "business_focused",
+                thread_analysis
+            )
+            if business_pattern:
+                patterns.append(business_pattern)
+            
+            return {
+                "success": True,
+                "reply_patterns": patterns,
+                "thread_analysis": thread_analysis,
+                "agent": self.config.name,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Reply patterns generation failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def _generate_single_reply_pattern(
+        self, 
+        thread_messages: List[Dict], 
+        pattern_type: str,
+        thread_analysis: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        単一の返信パターンを生成
+        
+        Args:
+            thread_messages: スレッドメッセージ
+            pattern_type: パターンタイプ
+            thread_analysis: スレッド分析結果
+            
+        Returns:
+            Dict: 返信パターン
+        """
+        try:
+            # パターン別の指示を取得
+            pattern_instructions = self._get_pattern_instructions(pattern_type)
+            
+            # 最新メッセージを取得
+            latest_message = thread_messages[-1] if thread_messages else {}
+            
+            # プロンプト構築
+            prompt = f"""
+            以下のメールスレッドに対して、{pattern_instructions['description']}な返信を生成してください。
+            
+            ## スレッド分析結果
+            - 関係性段階: {thread_analysis.get('relationship_stage', '不明')}
+            - 感情トーン: {thread_analysis.get('emotional_tone', '中性')}
+            - 主要トピック: {thread_analysis.get('main_topics', [])}
+            - 緊急度: {thread_analysis.get('urgency_level', '通常')}
+            
+            ## 最新受信メッセージ
+            送信者: {latest_message.get('sender', '不明')}
+            内容: {latest_message.get('content', '')}
+            
+            ## 返信スタイル指示
+            {pattern_instructions['style_guide']}
+            
+            ## 会話履歴（最新5件）
+            {self._format_conversation_history(thread_messages[-5:])}
+            
+            ## 出力要求
+            - 件名と本文を生成
+            - 返信理由を簡潔に説明
+            - 300-500文字程度
+            """
+            
+            # AI生成実行
+            response = await self.generate_response(prompt)
+            
+            if response.get("success"):
+                # 人間らしさを追加
+                reply_content = self._add_human_touches(response["content"])
+                
+                return {
+                    "pattern_type": pattern_type,
+                    "pattern_name": pattern_instructions["name"],
+                    "content": reply_content,
+                    "reasoning": pattern_instructions["reasoning"],
+                    "tone": pattern_instructions["tone"],
+                    "recommendation_score": self._calculate_recommendation_score(
+                        pattern_type, thread_analysis
+                    )
+                }
+            else:
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Single pattern generation failed: {e}")
+            return None
+    
+    def _analyze_email_thread(self, thread_messages: List[Dict]) -> Dict[str, Any]:
+        """
+        メールスレッドを分析
+        
+        Args:
+            thread_messages: スレッドメッセージ
+            
+        Returns:
+            Dict: 分析結果
+        """
+        if not thread_messages:
+            return {
+                "relationship_stage": "initial_contact",
+                "emotional_tone": "neutral",
+                "main_topics": [],
+                "urgency_level": "normal",
+                "message_count": 0
+            }
+        
+        message_count = len(thread_messages)
+        latest_message = thread_messages[-1]
+        
+        # 関係性段階を分析
+        relationship_stage = self._analyze_relationship_stage(thread_messages)
+        
+        # 感情トーンを分析
+        emotional_tone = self._analyze_emotional_tone(latest_message.get('content', ''))
+        
+        # 主要トピックを抽出
+        main_topics = self._extract_main_topics(thread_messages)
+        
+        # 緊急度を判定
+        urgency_level = self._analyze_urgency_level(latest_message.get('content', ''))
+        
+        return {
+            "relationship_stage": relationship_stage,
+            "emotional_tone": emotional_tone,
+            "main_topics": main_topics,
+            "urgency_level": urgency_level,
+            "message_count": message_count,
+            "last_message_date": latest_message.get('date', datetime.utcnow().isoformat())
+        }
+    
+    def _get_pattern_instructions(self, pattern_type: str) -> Dict[str, str]:
+        """
+        パターン別の指示を取得
+        
+        Args:
+            pattern_type: パターンタイプ
+            
+        Returns:
+            Dict: パターン指示
+        """
+        patterns = {
+            "friendly_enthusiastic": {
+                "name": "友好的・積極的",
+                "description": "明るく前向きで積極的",
+                "tone": "明るい・エネルギッシュ",
+                "style_guide": """
+                - 明るく前向きなトーンで
+                - 興味・関心を強く表現
+                - 絵文字を適度に使用（20%程度）
+                - 個人的なエピソードを含める
+                - 次のステップを積極的に提案
+                """,
+                "reasoning": "相手との関係を深め、積極的に進展させたい場合に最適"
+            },
+            "cautious_professional": {
+                "name": "控えめ・慎重",
+                "description": "丁寧で慎重なプロフェッショナル",
+                "tone": "丁寧・慎重",
+                "style_guide": """
+                - 丁寧で敬語中心
+                - 相手の意見を尊重する姿勢
+                - 慎重に条件を確認
+                - リスクや懸念点も含める
+                - 相手のペースに合わせる
+                """,
+                "reasoning": "慎重に進めたい案件や、まだ関係が浅い相手に適している"
+            },
+            "business_focused": {
+                "name": "ビジネス重視",
+                "description": "効率的でビジネス的",
+                "tone": "効率的・論理的",
+                "style_guide": """
+                - 簡潔で要点を絞った文章
+                - 具体的な数字や条件を重視
+                - スケジュールや期限を明確に
+                - ROIやメリットを強調
+                - 迅速な意思決定を促す
+                """,
+                "reasoning": "時間効率を重視し、ビジネス成果に焦点を当てたい場合"
+            }
+        }
+        
+        return patterns.get(pattern_type, patterns["friendly_enthusiastic"])
+    
+    def _analyze_emotional_tone(self, content: str) -> str:
+        """
+        感情トーンを分析
+        
+        Args:
+            content: メッセージ内容
+            
+        Returns:
+            str: 感情トーン
+        """
+        if not content:
+            return "neutral"
+        
+        # 簡易的な感情分析
+        positive_words = ["嬉しい", "楽しみ", "ありがとう", "素晴らしい", "最高", "期待"]
+        negative_words = ["申し訳", "困った", "難しい", "厳しい", "心配", "問題"]
+        urgent_words = ["急ぎ", "至急", "早急", "すぐに", "今すぐ"]
+        
+        content_lower = content.lower()
+        
+        positive_count = sum(1 for word in positive_words if word in content_lower)
+        negative_count = sum(1 for word in negative_words if word in content_lower)
+        urgent_count = sum(1 for word in urgent_words if word in content_lower)
+        
+        if urgent_count > 0:
+            return "urgent"
+        elif positive_count > negative_count:
+            return "positive"
+        elif negative_count > positive_count:
+            return "negative"
+        else:
+            return "neutral"
+    
+    def _extract_main_topics(self, thread_messages: List[Dict]) -> List[str]:
+        """
+        主要トピックを抽出
+        
+        Args:
+            thread_messages: スレッドメッセージ
+            
+        Returns:
+            List[str]: 主要トピック
+        """
+        topics = []
+        
+        # 全メッセージの内容を結合
+        all_content = " ".join([msg.get('content', '') for msg in thread_messages])
+        
+        # キーワードベースでトピック判定
+        topic_keywords = {
+            "価格交渉": ["価格", "料金", "費用", "予算", "金額", "コスト"],
+            "スケジュール": ["日程", "スケジュール", "期間", "納期", "時期"],
+            "条件確認": ["条件", "要件", "仕様", "詳細", "内容"],
+            "契約関連": ["契約", "合意", "署名", "条項", "規約"],
+            "技術相談": ["技術", "方法", "やり方", "手順", "プロセス"]
+        }
+        
+        for topic, keywords in topic_keywords.items():
+            if any(keyword in all_content for keyword in keywords):
+                topics.append(topic)
+        
+        return topics[:3]  # 最大3つまで
+    
+    def _analyze_urgency_level(self, content: str) -> str:
+        """
+        緊急度を分析
+        
+        Args:
+            content: メッセージ内容
+            
+        Returns:
+            str: 緊急度レベル
+        """
+        if not content:
+            return "normal"
+        
+        urgent_patterns = [
+            "急ぎ", "至急", "早急", "すぐに", "今すぐ", "緊急",
+            "お忙しい", "申し訳", "恐れ入り", "deadline", "期限"
+        ]
+        
+        content_lower = content.lower()
+        urgency_score = sum(1 for pattern in urgent_patterns if pattern in content_lower)
+        
+        if urgency_score >= 2:
+            return "high"
+        elif urgency_score == 1:
+            return "medium"
+        else:
+            return "normal"
+    
+    def _calculate_recommendation_score(
+        self, 
+        pattern_type: str, 
+        thread_analysis: Dict[str, Any]
+    ) -> float:
+        """
+        推奨スコアを計算
+        
+        Args:
+            pattern_type: パターンタイプ
+            thread_analysis: スレッド分析結果
+            
+        Returns:
+            float: 推奨スコア（0.0-1.0）
+        """
+        base_score = 0.5
+        
+        relationship_stage = thread_analysis.get("relationship_stage", "initial_contact")
+        emotional_tone = thread_analysis.get("emotional_tone", "neutral")
+        urgency_level = thread_analysis.get("urgency_level", "normal")
+        
+        # パターン別の推奨ロジック
+        if pattern_type == "friendly_enthusiastic":
+            if relationship_stage in ["warming_up", "relationship_building"]:
+                base_score += 0.3
+            if emotional_tone == "positive":
+                base_score += 0.2
+            if urgency_level == "normal":
+                base_score += 0.1
+                
+        elif pattern_type == "cautious_professional":
+            if relationship_stage == "initial_contact":
+                base_score += 0.3
+            if emotional_tone in ["negative", "neutral"]:
+                base_score += 0.2
+            if urgency_level == "normal":
+                base_score += 0.1
+                
+        elif pattern_type == "business_focused":
+            if relationship_stage == "price_negotiation":
+                base_score += 0.3
+            if urgency_level in ["medium", "high"]:
+                base_score += 0.2
+            if "価格交渉" in thread_analysis.get("main_topics", []):
+                base_score += 0.1
+        
+        return min(base_score, 1.0)
+    
     def _get_time_based_greeting(self, hour: int) -> str:
         """時間帯に応じた挨拶を取得"""
         if 5 <= hour < 12:
@@ -512,5 +946,9 @@ class NegotiationAgent(BaseAgent):
             "継続的な会話管理",
             "人間らしい文面作成",
             "関係性分析",
-            "適正価格算出"
+            "適正価格算出",
+            "返信パターン複数生成",
+            "メールスレッド分析",
+            "感情トーン分析",
+            "緊急度判定"
         ]

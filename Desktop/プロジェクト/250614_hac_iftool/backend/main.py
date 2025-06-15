@@ -56,6 +56,34 @@ except ImportError:
     async def health_check():
         return {"status": "healthy"}
 
+# インフルエンサー API ルーター
+try:
+    from api.influencers import router as influencers_router
+except ImportError:
+    from fastapi import APIRouter
+    influencers_router = APIRouter()
+
+# AI推薦 API ルーター
+try:
+    from api.ai_recommendations import router as ai_recommendations_router
+except ImportError:
+    from fastapi import APIRouter
+    ai_recommendations_router = APIRouter()
+
+# 交渉エージェント API ルーター
+try:
+    from api.negotiation import router as negotiation_router
+except ImportError:
+    from fastapi import APIRouter
+    negotiation_router = APIRouter()
+
+# データ同期 API ルーター
+try:
+    from api.v1.data_sync import router as data_sync_router
+except ImportError:
+    from fastapi import APIRouter
+    data_sync_router = APIRouter()
+
 # ミドルウェア（存在しない場合はダミーを使用）
 try:
     from middleware.rate_limit import RateLimitMiddleware
@@ -95,6 +123,17 @@ async def lifespan(app: FastAPI):
         # データベース初期化
         logger.info("📊 Initializing Firestore connection...")
         await init_firestore()
+        
+        # BigQuery 初期化
+        logger.info("🏗️ Initializing BigQuery data warehouse...")
+        try:
+            from core.bigquery_client import initialize_bigquery
+            await initialize_bigquery()
+            logger.info("✅ BigQuery initialized successfully")
+        except ImportError:
+            logger.warning("⚠️ BigQuery module not available")
+        except Exception as e:
+            logger.error(f"❌ BigQuery initialization failed: {e}")
         
         # 監視システム初期化
         logger.info("📈 Setting up monitoring...")
@@ -254,11 +293,37 @@ def setup_routers(app: FastAPI) -> None:
         tags=["Health Check"]
     )
     
+    # インフルエンサー API
+    app.include_router(
+        influencers_router,
+        tags=["Influencers"]
+    )
+    
+    # AI推薦 API
+    app.include_router(
+        ai_recommendations_router,
+        tags=["AI Recommendations"]
+    )
+    
     # メインAPI（v1）
     app.include_router(
         api_router,
         prefix="/api/v1",
         tags=["API v1"]
+    )
+    
+    # 交渉エージェント API
+    app.include_router(
+        negotiation_router,
+        prefix="/api/v1",
+        tags=["Negotiation Agent"]
+    )
+    
+    # データ同期 API
+    app.include_router(
+        data_sync_router,
+        prefix="/api/v1/data",
+        tags=["Data Sync & Analytics"]
     )
 
 

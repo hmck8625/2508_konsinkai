@@ -205,10 +205,6 @@ module.exports = {
   
   // プラグイン
   plugins: [
-    require('tailwindcss-animate'),
-    require('@tailwindcss/forms'),
-    require('@tailwindcss/typography'),
-    
     // カスタムユーティリティ
     function({ addUtilities }) {
       const newUtilities = {

@@ -10,8 +10,6 @@
 const nextConfig = {
   // 実験的機能の有効化
   experimental: {
-    // App Router を使用
-    appDir: true,
     // Server Components の最適化
     serverComponentsExternalPackages: ['@google-cloud/firestore'],
     // 部分的な事前レンダリング（PPR）を有効化
@@ -110,13 +108,17 @@ const nextConfig = {
 
   // リライト設定（プロキシ）
   async rewrites() {
-    return [
-      // API リクエストを Cloud Run にプロキシ
-      {
+    const rewrites = [];
+    
+    // API URL が設定されている場合のみプロキシを追加
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      rewrites.push({
         source: '/api/v1/:path*',
         destination: `${process.env.NEXT_PUBLIC_API_URL}/api/v1/:path*`,
-      },
-    ];
+      });
+    }
+    
+    return rewrites;
   },
 
   // Webpack 設定のカスタマイズ

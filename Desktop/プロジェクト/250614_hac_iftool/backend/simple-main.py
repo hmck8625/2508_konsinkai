@@ -6,6 +6,7 @@ Python 3.13対応版
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from api.influencers import router as influencers_router
 
 # FastAPIアプリケーション作成
 app = FastAPI(
@@ -49,6 +50,9 @@ async def test_endpoint():
             "自動交渉"
         ]
     }
+
+# ルーターを追加
+app.include_router(influencers_router)
 
 if __name__ == "__main__":
     uvicorn.run(

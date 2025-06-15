@@ -1,296 +1,244 @@
-/**
- * ランディングページ（ホームページ）
- * 
- * @description YouTube Influencer Matching Agent のメインランディングページ
- * 訪問者に対してサービスの価値提案を行い、ユーザー登録やデモへ誘導
- * 
- * @author InfuMatch Development Team
- * @version 1.0.0
- */
+'use client';
 
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { HeroSection } from '@/components/sections/hero-section';
-import { FeaturesSection } from '@/components/sections/features-section';
-import { HowItWorksSection } from '@/components/sections/how-it-works-section';
-import { StatsSection } from '@/components/sections/stats-section';
-import { TestimonialsSection } from '@/components/sections/testimonials-section';
-import { CTASection } from '@/components/sections/cta-section';
-import { 
-  Play, 
-  Zap, 
-  Target, 
-  BarChart3, 
-  MessageSquare, 
-  Shield,
-  ArrowRight,
-  CheckCircle
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { signOut, useSession } from 'next-auth/react';
+import { AuthContent, UserInfo } from '@/components/auth-guard';
 
-/**
- * ランディングページのメタデータ
- */
-export const metadata = {
-  title: 'YouTube Influencer Matching Agent - AIが自動で交渉まで代行',
-  description: 'YouTubeマイクロインフルエンサーと企業を自動でマッチング。AIエージェントが交渉から契約まで代行し、効率的なインフルエンサーマーケティングを実現。',
-};
-
-/**
- * メインのランディングページコンポーネント
- */
 export default function HomePage() {
-  return (
-    <div className=\"flex flex-col min-h-screen\">
-      {/* ヒーローセクション */}
-      <HeroSection />
-      
-      {/* 特徴セクション */}
-      <FeaturesSection />
-      
-      {/* 動作原理セクション */}
-      <HowItWorksSection />
-      
-      {/* 統計セクション */}
-      <StatsSection />
-      
-      {/* お客様の声セクション */}
-      <TestimonialsSection />
-      
-      {/* CTA セクション */}
-      <CTASection />
-    </div>
-  );
-}
+  const [isVisible, setIsVisible] = useState(false);
+  const { data: session } = useSession();
 
-/**
- * ヒーローセクション下のベネフィット表示
- * 
- * @description 主要な価値提案を3つのカードで表示
- */
-function BenefitsPreview() {
-  const benefits = [
-    {
-      icon: <Zap className=\"h-8 w-8 text-primary\" />,
-      title: '90%の工数削減',
-      description: 'AI自動化で手動作業を大幅カット',
-      highlight: '従来比',
-    },
-    {
-      icon: <Target className=\"h-8 w-8 text-accent\" />,
-      title: '高精度マッチング',
-      description: 'YouTube特化で最適な組み合わせ',
-      highlight: '95%適合率',
-    },
-    {
-      icon: <MessageSquare className=\"h-8 w-8 text-success\" />,
-      title: '自然な交渉',
-      description: 'AIとバレない人間らしい交渉',
-      highlight: '成約率30%',
-    },
-  ];
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut({ 
+        callbackUrl: '/',
+        redirect: true 
+      });
+    } catch (error) {
+      console.error('ログアウトエラー:', error);
+    }
+  };
 
   return (
-    <section className=\"py-16 bg-muted/30\">
-      <div className=\"container mx-auto px-4\">
-        <div className=\"grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto\">
-          {benefits.map((benefit, index) => (
-            <Card key={index} className=\"text-center card-hover\">
-              <CardHeader className=\"pb-4\">
-                <div className=\"flex justify-center mb-3\">
-                  {benefit.icon}
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
+      {/* 背景アニメーション */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -inset-10 opacity-50">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-float"></div>
+          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-cyan-500 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-float" style={{animationDelay: '2s'}}></div>
+          <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-float" style={{animationDelay: '4s'}}></div>
+        </div>
+      </div>
+
+      {/* ナビゲーション */}
+      <nav className="relative z-10 bg-glass backdrop-blur-md border-b border-white/10">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="text-2xl font-bold text-gradient">
+              InfuMatch
+            </div>
+            <div className="hidden md:flex space-x-8">
+              <Link href="/search" className="text-white/80 hover:text-white transition-colors">
+                検索
+              </Link>
+              <Link href="/messages" className="text-white/80 hover:text-white transition-colors">
+                メッセージ
+              </Link>
+              <Link href="/matching" className="text-white/80 hover:text-white transition-colors">
+                AIマッチング
+              </Link>
+              <Link href="/settings" className="text-white/80 hover:text-white transition-colors">
+                設定
+              </Link>
+            </div>
+            <AuthContent
+              authenticated={
+                <div className="flex items-center space-x-4">
+                  <UserInfo />
+                  <button 
+                    onClick={handleLogout}
+                    className="btn btn-outline border-white/30 text-white hover:bg-white hover:text-purple-900"
+                  >
+                    ログアウト
+                  </button>
                 </div>
-                <Badge variant=\"secondary\" className=\"mb-2\">
-                  {benefit.highlight}
-                </Badge>
-                <CardTitle className=\"text-lg\">{benefit.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className=\"text-sm\">
-                  {benefit.description}
-                </CardDescription>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/**
- * 問題提起セクション
- * 
- * @description 現在の課題を明確にして、ソリューションの必要性を訴求
- */
-function ProblemSection() {
-  const problems = [
-    'インフルエンサーとのコネクションがない',
-    '適切な報酬設定が分からない',
-    '交渉に時間とスキルが必要',
-    '効果測定が困難',
-    '小規模案件は代理店が対応してくれない',
-  ];
-
-  return (
-    <section className=\"py-16 bg-background\">
-      <div className=\"container mx-auto px-4\">
-        <div className=\"max-w-3xl mx-auto text-center\">
-          <h2 className=\"text-3xl font-bold mb-6\">
-            中小企業のインフルエンサーマーケティング、
-            <span className=\"text-destructive\">こんな課題ありませんか？</span>
-          </h2>
-          
-          <div className=\"grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8\">
-            {problems.map((problem, index) => (
-              <div key={index} className=\"flex items-start text-left p-4 bg-muted/50 rounded-lg\">
-                <div className=\"w-2 h-2 bg-destructive rounded-full mt-2 mr-3 flex-shrink-0\" />
-                <span className=\"text-sm text-muted-foreground\">{problem}</span>
-              </div>
-            ))}
+              }
+              unauthenticated={
+                <Link href="/auth/signin">
+                  <button className="btn btn-primary">
+                    無料で始める
+                  </button>
+                </Link>
+              }
+            />
           </div>
-          
-          <p className=\"text-lg text-muted-foreground mb-6\">
-            これらの課題を<strong className=\"text-foreground\">AI エージェント</strong>が全て解決します
-          </p>
-          
-          <Button size=\"lg\" className=\"btn-animate\" asChild>
-            <Link href=\"#solution\">
-              解決策を見る
-              <ArrowRight className=\"ml-2 h-4 w-4\" />
-            </Link>
-          </Button>
         </div>
-      </div>
-    </section>
-  );
-}
+      </nav>
 
-/**
- * ソリューション紹介セクション
- * 
- * @description 具体的な解決策とその仕組みを説明
- */
-function SolutionSection() {
-  const solutions = [
-    {
-      step: '01',
-      title: 'AI がインフルエンサーを発見',
-      description: 'YouTube特化で1000人〜10万人のマイクロインフルエンサーを自動発見。商材に最適な相手を高精度でマッチング。',
-      icon: <Target className=\"h-6 w-6\" />,
-    },
-    {
-      step: '02', 
-      title: 'AI エージェントが自動交渉',
-      description: '人間らしい自然な文面で初回コンタクト。料金交渉から契約条件まで、AIが代行して成約率30%を実現。',
-      icon: <MessageSquare className=\"h-6 w-6\" />,
-    },
-    {
-      step: '03',
-      title: 'ダッシュボードで一元管理',
-      description: '全案件の進捗をリアルタイム管理。ROI分析や効果測定も自動で生成され、次回施策の改善に活用。',
-      icon: <BarChart3 className=\"h-6 w-6\" />,
-    },
-  ];
+      {/* メインコンテンツ */}
+      <main className="relative z-10 flex-1">
+        {/* ヒーローセクション */}
+        <section className="container mx-auto px-6 py-20 text-center">
+          <div className={`transform transition-all duration-1000 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+            <div className="max-w-4xl mx-auto">
+              {/* バッジ */}
+              <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/10 border border-white/20 text-white/90 text-sm font-medium mb-8 backdrop-blur-md">
+                <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+                AIエージェントが24/7稼働中
+              </div>
 
-  return (
-    <section id=\"solution\" className=\"py-16 bg-gradient-to-br from-primary/5 to-accent/5\">
-      <div className=\"container mx-auto px-4\">
-        <div className=\"max-w-4xl mx-auto\">
-          <div className=\"text-center mb-12\">
-            <Badge variant=\"outline\" className=\"mb-4\">
-              AIエージェント・ソリューション
-            </Badge>
-            <h2 className=\"text-3xl font-bold mb-4\">
-              3ステップで完結する
-              <span className=\"gradient-text block\">自動インフルエンサーマーケティング</span>
+              {/* メインタイトル */}
+              <h1 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight">
+                YouTube
+                <span className="text-gradient block">Influencer</span>
+                <span className="text-white">Matching Agent</span>
+              </h1>
+
+              {/* サブタイトル */}
+              <p className="text-xl md:text-2xl text-white/80 mb-12 max-w-3xl mx-auto text-balance">
+                AIエージェントが最適なYouTubeインフルエンサーを見つけ、
+                <br className="hidden md:block" />
+                自動で交渉まで行う革新的なマッチングプラットフォーム
+              </p>
+
+              {/* CTA ボタン */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <Link href="/search">
+                  <button className="btn btn-primary text-lg px-8 py-4 w-full sm:w-auto">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    インフルエンサーを検索
+                  </button>
+                </Link>
+                <button className="btn btn-secondary text-lg px-8 py-4 w-full sm:w-auto bg-white/10 border-white/30 text-white hover:bg-white/20">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8m-3-10v20" />
+                  </svg>
+                  デモを見る
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 特徴セクション */}
+        <section className="container mx-auto px-6 py-20">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              AIエージェントの力
             </h2>
-            <p className=\"text-lg text-muted-foreground\">
-              従来の手動プロセスを AI が自動化。工数90%削減で効率的な施策実行を実現
+            <p className="text-xl text-white/70 max-w-2xl mx-auto">
+              3つの専門AIエージェントが連携して、最適なマッチングと交渉を実現
             </p>
           </div>
-          
-          <div className=\"space-y-8\">
-            {solutions.map((solution, index) => (
-              <div key={index} className=\"flex flex-col md:flex-row items-start md:items-center gap-6\">
-                <div className=\"flex items-center gap-4 md:w-1/3\">
-                  <div className=\"flex-shrink-0 w-12 h-12 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold\">
-                    {solution.step}
-                  </div>
-                  <div className=\"flex items-center gap-2\">
-                    {solution.icon}
-                    <h3 className=\"text-lg font-semibold\">{solution.title}</h3>
-                  </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {/* 特徴1 */}
+            <div className="card bg-white/10 border-white/20 backdrop-blur-md p-8 text-center group hover:scale-105 transition-all duration-300">
+              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:animate-glow">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-4">AIデータ分析</h3>
+              <p className="text-white/70">
+                YouTube APIとAIを活用し、登録者数、エンゲージメント率、コンテンツ品質を自動分析
+              </p>
+            </div>
+
+            {/* 特徴2 */}
+            <div className="card bg-white/10 border-white/20 backdrop-blur-md p-8 text-center group hover:scale-105 transition-all duration-300">
+              <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:animate-glow">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-4">スマートマッチング</h3>
+              <p className="text-white/70">
+                機械学習アルゴリズムが企業のニーズと最適なインフルエンサーを高精度でマッチング
+              </p>
+            </div>
+
+            {/* 特徴3 */}
+            <div className="card bg-white/10 border-white/20 backdrop-blur-md p-8 text-center group hover:scale-105 transition-all duration-300">
+              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:animate-glow">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-4">自動交渉</h3>
+              <p className="text-white/70">
+                交渉エージェントが条件調整からコラボレーション提案まで全て自動で対応
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 統計セクション */}
+        <section className="container mx-auto px-6 py-20">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              実績と信頼
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
+            {[
+              { number: '10,000+', label: 'インフルエンサー登録' },
+              { number: '500+', label: 'マッチング成功' },
+              { number: '95%', label: '満足度' },
+              { number: '24/7', label: 'AI稼働時間' }
+            ].map((stat, index) => (
+              <div key={index} className="text-center">
+                <div className="text-4xl md:text-5xl font-bold text-gradient mb-2">
+                  {stat.number}
                 </div>
-                
-                <div className=\"md:w-2/3\">
-                  <p className=\"text-muted-foreground\">{solution.description}</p>
+                <div className="text-white/70 text-sm md:text-base">
+                  {stat.label}
                 </div>
               </div>
             ))}
           </div>
-          
-          <div className=\"text-center mt-12\">
-            <Button size=\"lg\" className=\"btn-animate\" asChild>
-              <Link href=\"/demo\">
-                <Play className=\"mr-2 h-4 w-4\" />
-                3分デモを見る
+        </section>
+
+        {/* CTA セクション */}
+        <section className="container mx-auto px-6 py-20">
+          <div className="card bg-white/5 border-white/10 backdrop-blur-md p-12 text-center max-w-4xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              今すぐ始めましょう
+            </h2>
+            <p className="text-xl text-white/70 mb-8 max-w-2xl mx-auto">
+              無料でアカウントを作成し、AIエージェントの力を体験してください
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/search">
+                <button className="btn btn-primary text-lg px-8 py-4">
+                  無料で始める
+                </button>
               </Link>
-            </Button>
+              <button className="btn btn-outline text-lg px-8 py-4 border-white/30 text-white hover:bg-white hover:text-purple-900">
+                詳しく見る
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* フッター */}
+      <footer className="relative z-10 bg-black/20 backdrop-blur-md border-t border-white/10">
+        <div className="container mx-auto px-6 py-8">
+          <div className="text-center text-white/60">
+            <p>&copy; 2025 InfuMatch. All rights reserved.</p>
+            <p className="text-sm mt-2">Google Cloud Japan AI Hackathon Vol.2 参加作品</p>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-/**
- * 信頼性・セキュリティセクション
- * 
- * @description Google Cloud基盤であることと、セキュリティの安心感を訴求
- */
-function TrustSection() {
-  const trustFactors = [
-    {
-      icon: <Shield className=\"h-6 w-6\" />,
-      title: 'Google Cloud 基盤',
-      description: 'エンタープライズレベルのセキュリティ',
-    },
-    {
-      icon: <CheckCircle className=\"h-6 w-6\" />,
-      title: 'GDPR準拠',
-      description: '個人情報保護法に完全対応',
-    },
-    {
-      icon: <BarChart3 className=\"h-6 w-6\" />,
-      title: '99.9%稼働率',
-      description: '24/7 監視体制で安定運用',
-    },
-  ];
-
-  return (
-    <section className=\"py-16 bg-muted/30\">
-      <div className=\"container mx-auto px-4\">
-        <div className=\"max-w-4xl mx-auto text-center\">
-          <h2 className=\"text-2xl font-bold mb-8\">
-            <span className=\"text-primary\">Google Cloud</span> で構築された
-            信頼できるプラットフォーム
-          </h2>
-          
-          <div className=\"grid grid-cols-1 md:grid-cols-3 gap-6\">
-            {trustFactors.map((factor, index) => (
-              <div key={index} className=\"flex flex-col items-center text-center p-4\">
-                <div className=\"w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-3\">
-                  {factor.icon}
-                </div>
-                <h3 className=\"font-semibold mb-2\">{factor.title}</h3>
-                <p className=\"text-sm text-muted-foreground\">{factor.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
+      </footer>
+    </div>
   );
 }
