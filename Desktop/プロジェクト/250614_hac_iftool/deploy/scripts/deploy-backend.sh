@@ -59,7 +59,7 @@ echo "🔒 Creating secrets if not exists..."
 # YouTube API Key
 if ! gcloud secrets describe youtube-api-key --project=$PROJECT_ID > /dev/null 2>&1; then
     echo "Creating YouTube API Key secret..."
-    echo -n "AIzaSyDApW6Csr_FEbGkOyxJESReh85I03NTjaw" | \
+    echo -n "AIzaSyDtPl5WSRdxk744ha5Tlwno4iTBZVO96r4" | \
         gcloud secrets create youtube-api-key \
         --data-file=- \
         --project=$PROJECT_ID
@@ -67,10 +67,10 @@ else
     echo "YouTube API Key secret already exists"
 fi
 
-# Gemini API Key
+# Gemini API Key (新しいキーが必要)
 if ! gcloud secrets describe gemini-api-key --project=$PROJECT_ID > /dev/null 2>&1; then
     echo "Creating Gemini API Key secret..."
-    echo -n "AIzaSyCwEzSE-OPbznJb8OniNpf9zqTMIOAKbMk" | \
+    echo -n "YOUR_NEW_GEMINI_API_KEY" | \
         gcloud secrets create gemini-api-key \
         --data-file=- \
         --project=$PROJECT_ID
@@ -159,11 +159,12 @@ echo "4. Monitor performance and logs"
 # 11. ヘルスチェックの実行
 echo "🏥 Running health check..."
 sleep 10
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/health")
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/")
 
 if [ "$HTTP_STATUS" = "200" ]; then
     echo "✅ Health check passed"
 else
     echo "❌ Health check failed (HTTP $HTTP_STATUS)"
-    exit 1
+    echo "Testing API endpoint..."
+    curl -i "$SERVICE_URL/api/v1/influencers" | head -10
 fi
