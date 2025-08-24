@@ -1,0 +1,46 @@
+# Ignore everything except quiz-app folder
+*
+!quiz-app/
+!quiz-app/**
+!.gitignore
+!CLAUDE.md
+
+# macOS
+.DS_Store
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# Environment variables
+.env.local
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Build output
+.next/
+dist/
+build/
+
+# Cache
+.cache/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+
+# Other development files
+.npm
+.yarn

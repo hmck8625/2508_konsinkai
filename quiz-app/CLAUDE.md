@@ -138,6 +138,14 @@ CSV format: `qid,title,choice1,choice2,choice3,choice4,answerIndex,timeLimitSec`
 ### Game State Machine
 Extend EventStatus union type and update control logic for new states.
 
+## Repository Rules
+
+### Push Policy
+- **ONLY push quiz-app folder contents** to the repository
+- Exclude Desktop/プロジェクト, hcam0509, and other irrelevant directories
+- Use .gitignore to prevent accidental inclusion of unrelated files
+- Keep the repository clean with only project-related code
+
 ## Deployment Notes
 
 - Uses Vercel's serverless functions with 30-second timeout
