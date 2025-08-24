@@ -40,20 +40,13 @@ function ScreenDisplay() {
           const oldQuestionId = ((gameState as Record<string, unknown>)?.currentQuestion as Record<string, unknown>)?.id;
           const newQuestionId = ((stateData as Record<string, unknown>)?.currentQuestion as Record<string, unknown>)?.id;
           
-          console.log(`🔍 POLLING DEBUG: old="${oldQuestionId}" -> new="${newQuestionId}" | hasShownResults=${hasShownResults} | resultStats=${resultStats ? 'EXISTS' : 'NULL'}`);
-          
-          if (oldQuestionId !== newQuestionId && newQuestionId && oldQuestionId) {
-            console.log(`🔄 RESETTING: Question changed from ${oldQuestionId} to ${newQuestionId}`);
+          // Only reset state when we have a clear question change (both old and new exist and are different)
+          if (oldQuestionId && newQuestionId && oldQuestionId !== newQuestionId) {
             setHasShownResults(false);
             setShowingResults(false);
             setCurrentResultIndex(-1);
             setAnimatingParticipant(null);
-            console.log('🗑️ CLEARING resultStats due to question change');
-            setResultStats(null); // Clear persistent statistics
-          } else if (oldQuestionId === newQuestionId && resultStats) {
-            console.log(`✅ PRESERVING: Same question ${newQuestionId}, keeping resultStats`);
-          } else if (oldQuestionId !== newQuestionId && !oldQuestionId && newQuestionId) {
-            console.log(`🆕 INITIAL LOAD: Question ${newQuestionId} loaded for first time`);
+            setResultStats(null);
           }
           
           setGameState(stateData);
@@ -66,33 +59,20 @@ function ScreenDisplay() {
           setParticipants(participantsData.participants || []);
         }
 
-        // Fetch answer stats if there's an active question and results haven't been shown yet
-        if (stateData && stateData.status === 'active' && stateData.currentQuestion && !hasShownResults) {
-          console.log('Polling /api/answer - results not shown yet');
+        // Fetch answer stats only if there's an active question, it has an ID, and results haven't been shown yet
+        const currentQuestionId = ((stateData as Record<string, unknown>)?.currentQuestion as Record<string, unknown>)?.id;
+        if (stateData && 
+            (stateData as Record<string, unknown>).status === 'active' && 
+            currentQuestionId &&
+            !hasShownResults && 
+            !resultStats) {
           try {
-            const answerResponse = await fetch(`/api/answer?e=${eventId}&q=${stateData.currentQuestion.id}`);
+            const answerResponse = await fetch(`/api/answer?e=${eventId}&q=${currentQuestionId}`);
             if (answerResponse.ok) {
               const answerData = await answerResponse.json();
-              // Only update if resultStats doesn't exist (to avoid overwriting saved results)
-              if (!resultStats) {
-                setAnswerStats(answerData);
-              }
+              setAnswerStats(answerData);
             } else {
-              console.warn('Failed to fetch answer stats, using defaults');
-              // Only set defaults if resultStats doesn't exist
-              if (!resultStats) {
-                setAnswerStats({
-                  totalAnswers: 0,
-                  totalParticipants: participants.length,
-                  timeRemaining: 60000, // Default 60 seconds
-                  extensionCount: 0
-                });
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching answer stats:', error);
-            // Only set defaults if resultStats doesn't exist
-            if (!resultStats) {
+              // Set defaults only if we don't have any stats yet
               setAnswerStats({
                 totalAnswers: 0,
                 totalParticipants: participants.length,
@@ -100,28 +80,33 @@ function ScreenDisplay() {
                 extensionCount: 0
               });
             }
+          } catch (error) {
+            console.error('Error fetching answer stats:', error);
+            // Set defaults only if we don't have any stats yet
+            setAnswerStats({
+              totalAnswers: 0,
+              totalParticipants: participants.length,
+              timeRemaining: 60000,
+              extensionCount: 0
+            });
           }
-        } else {
-          // Clear answer stats when not in active state, but keep if results have been shown  
-          if (!hasShownResults && !resultStats) {
-            setAnswerStats(null);
-          } else if (hasShownResults) {
-            console.log('Skipping /api/answer polling - results already shown, using saved resultStats');
-          }
+        } else if (!hasShownResults && !resultStats) {
+          // Clear answer stats only when not in active state and no results shown
+          setAnswerStats(null);
         }
       } catch (error) {
         console.error('Failed to fetch screen data:', error);
       }
     };
 
-    // Poll every 1 second for screen display
-    const interval = setInterval(pollData, 1000);
+    // Poll every 2 seconds for screen display
+    const interval = setInterval(pollData, 2000);
 
     // Initial fetch
     pollData();
 
     return () => clearInterval(interval);
-  }, [eventId, hasShownResults, resultStats, gameState, participants.length]);
+  }, [eventId]);
 
   // Game control functions
   const handleStartGame = async () => {
