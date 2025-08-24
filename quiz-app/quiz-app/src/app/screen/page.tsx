@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function ScreenPage() {
+function ScreenDisplay() {
   const searchParams = useSearchParams();
   const [eventId, setEventId] = useState('');
   const [gameState, setGameState] = useState<Record<string, unknown> | null>(null);
@@ -760,5 +760,24 @@ export default function ScreenPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function ScreenPageLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 text-white flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold mb-4">懇親会クイズ</h1>
+        <p className="text-xl opacity-75">画面を読み込み中...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ScreenPage() {
+  return (
+    <Suspense fallback={<ScreenPageLoading />}>
+      <ScreenDisplay />
+    </Suspense>
   );
 }
