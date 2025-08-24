@@ -146,6 +146,27 @@ Extend EventStatus union type and update control logic for new states.
 - Use .gitignore to prevent accidental inclusion of unrelated files
 - Keep the repository clean with only project-related code
 
+## Vercel Deployment Setup
+
+### Required Configuration
+- Root directory: `quiz-app`
+- Build command: `npm run build` 
+- Install command: `npm install`
+- Output directory: `.next`
+
+### Environment Variables (Required)
+```env
+KV_REST_API_URL=https://your-kv-xxx.kv.vercel-storage.com
+KV_REST_API_TOKEN=your_kv_token
+KV_REST_API_READ_ONLY_TOKEN=your_kv_read_only_token
+ADMIN_SECRET=secure_admin_password
+```
+
+### Vercel KV Database
+1. Create KV database in Vercel Dashboard
+2. Environment variables are auto-populated
+3. TTL-based cleanup (24-48 hours)
+
 ## Deployment Notes
 
 - Uses Vercel's serverless functions with 30-second timeout
