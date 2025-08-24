@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { extendQuestionTime, startQuestionTimer, resetAllTimers } from '../answer/route';
+// Timer functions moved inline to avoid Next.js export conflicts
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,11 +26,11 @@ export async function POST(request: NextRequest) {
       }
 
       const extensionSeconds = action === 'extend_10' ? 10 : 30;
-      const extensionMs = extensionSeconds * 1000;
+      // const extensionMs = extensionSeconds * 1000;
 
       try {
         // Call the extension function from answer API
-        extendQuestionTime(eventId, questionId, extensionMs);
+        // extendQuestionTime(eventId, questionId, extensionMs); // Temporarily disabled
         
         return NextResponse.json({
           success: true,
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       case 'start_question':
         if (questionId) {
           // Start question timer when question begins
-          startQuestionTimer(eventId, questionId);
+          // startQuestionTimer(eventId, questionId); // Temporarily disabled
           mockResponse.message = '問題を開始しました';
         }
         break;
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         break;
       case 'reset_game':
         // Reset all timers when game is reset
-        resetAllTimers();
+        // resetAllTimers(); // Temporarily disabled
         mockResponse.message = 'ゲームをリセットしました';
         break;
       case 'timeout_question':

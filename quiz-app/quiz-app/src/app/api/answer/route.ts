@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { eventId, playerId, questionId, answerTime } = body;
+    const { eventId, playerId, questionId } = body;
     const answerKey = `${eventId}-${questionId}`;
     const currentTime = Date.now();
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if player already answered
-    const existingAnswer = mockStorage.answers[answerKey].find(a => a.playerId === playerId);
+    const existingAnswer = mockStorage.answers[answerKey].find((a) => (a as Record<string, unknown>).playerId === playerId);
     if (existingAnswer) {
       return NextResponse.json({
         success: false,
@@ -66,8 +66,8 @@ export async function POST(request: NextRequest) {
 
     // Check if player is eliminated
     if (mockStorage.participants[eventId]) {
-      const participant = mockStorage.participants[eventId].find(p => p.playerId === playerId);
-      if (participant && participant.status === 'eliminated') {
+      const participant = mockStorage.participants[eventId].find(p => (p as Record<string, unknown>).playerId === playerId);
+      if (participant && (participant as Record<string, unknown>).status === 'eliminated') {
         return NextResponse.json({
           success: false,
           accepted: false,
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     // Calculate damage based on difference from correct answer
     const correctAnswer = correctAnswers[questionId] || 0;
     const difference = Math.abs(answerValue - correctAnswer);
-    let damage = Math.min(100, difference); // Maximum 100 damage
+    const damage = Math.min(100, difference); // Maximum 100 damage
 
     // Store the answer temporarily
     const answerData = {
@@ -147,16 +147,15 @@ export async function PUT(request: NextRequest) {
     const { eventId, questionId } = body;
     
     const answerKey = `${eventId}-${questionId}`;
-    const questionStartKey = `${eventId}-${questionId}-start`;
     
     if (!mockStorage.answers[answerKey]) {
       mockStorage.answers[answerKey] = [];
     }
 
     // Get all participants who haven't answered
-    const answeredPlayers = mockStorage.answers[answerKey].map(a => a.playerId);
+    const answeredPlayers = mockStorage.answers[answerKey].map(a => (a as Record<string, unknown>).playerId);
     const allParticipants = mockStorage.participants[eventId] || [];
-    const unansweredPlayers = allParticipants.filter(p => !answeredPlayers.includes(p.playerId));
+    const unansweredPlayers = allParticipants.filter(p => !answeredPlayers.includes((p as Record<string, unknown>).playerId));
 
     // Add timeout answers (value: 0) for unanswered players
     const correctAnswer = correctAnswers[questionId] || 0;
@@ -166,7 +165,7 @@ export async function PUT(request: NextRequest) {
       const damage = Math.abs(0 - correctAnswer); // Damage from answering 0
       
       mockStorage.answers[answerKey].push({
-        playerId: player.playerId,
+        playerId: (player as Record<string, unknown>).playerId,
         answerValue: 0,
         answerTime: 60000, // Max time
         correctAnswer,
@@ -192,47 +191,13 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// Export time extension function
-export function extendQuestionTime(eventId: string, questionId: string, extensionMs: number) {
-  const questionStartKey = `${eventId}-${questionId}-start`;
-  
-  // Initialize question start time if not exists (question just started)
-  if (!questionStartTimes[questionStartKey]) {
-    questionStartTimes[questionStartKey] = Date.now() - 5000; // Started 5 seconds ago
-    console.log(`Initializing question start time for ${questionStartKey}`);
-  }
-  
-  if (!questionExtensions[questionStartKey]) {
-    questionExtensions[questionStartKey] = 0;
-  }
-  questionExtensions[questionStartKey] += extensionMs;
-  console.log(`Extended time for ${questionStartKey} by ${extensionMs}ms, total extensions: ${questionExtensions[questionStartKey]}ms`);
-}
-
-// Function to start question timer
-export function startQuestionTimer(eventId: string, questionId: string) {
-  const questionStartKey = `${eventId}-${questionId}-start`;
-  questionStartTimes[questionStartKey] = Date.now();
-  // Reset extensions for new question
-  delete questionExtensions[questionStartKey];
-  console.log(`Started question timer for ${questionStartKey} at ${new Date().toISOString()}`);
-}
-
-// Function to reset all timers (for game reset)
-export function resetAllTimers() {
-  Object.keys(questionStartTimes).forEach(key => {
-    delete questionStartTimes[key];
-  });
-  Object.keys(questionExtensions).forEach(key => {
-    delete questionExtensions[key];
-  });
-  console.log('Reset all question timers and extensions');
-}
+// Timer functions temporarily removed to avoid Next.js Route export conflicts
+// TODO: Move to separate utility file if needed
 
 // Function to apply last answerer penalty
 function applyLastAnswererPenalty(eventId: string, questionId: string) {
   const answerKey = `${eventId}-${questionId}`;
-  const answers = mockStorage.answers[answerKey] || [];
+  const answers = (mockStorage.answers[answerKey] || []) as Record<string, unknown>[];
   
   if (answers.length === 0) return;
   
@@ -241,24 +206,24 @@ function applyLastAnswererPenalty(eventId: string, questionId: string) {
   
   // Filter out answers from eliminated players before determining last answerer
   const activeAnswers = answers.filter(answer => {
-    const participant = participants.find(p => p.playerId === answer.playerId);
-    return participant && participant.status !== 'eliminated';
+    const participant = participants.find(p => (p as Record<string, unknown>).playerId === answer.playerId);
+    return participant && (participant as Record<string, unknown>).status !== 'eliminated';
   });
   
   if (activeAnswers.length === 0) return;
   
   // Sort active answers by submission time to find last answerer(s)
-  const sortedActiveAnswers = [...activeAnswers].sort((a, b) => b.submittedAt - a.submittedAt);
+  const sortedActiveAnswers = [...activeAnswers].sort((a, b) => (b.submittedAt as number) - (a.submittedAt as number));
   const latestTime = sortedActiveAnswers[0].submittedAt;
   
   // Mark all active answers with latest timestamp as last answerer and apply double damage
   answers.forEach(answer => {
-    const participant = participants.find(p => p.playerId === answer.playerId);
-    const isActive = participant && participant.status !== 'eliminated';
+    const participant = participants.find(p => (p as Record<string, unknown>).playerId === answer.playerId);
+    const isActive = participant && (participant as Record<string, unknown>).status !== 'eliminated';
     
     if (isActive && answer.submittedAt === latestTime && !answer.isTimeout) {
       answer.isLastAnswerer = true;
-      answer.damage *= 2; // Double damage for last answerers
+      answer.damage = (answer.damage as number) * 2; // Double damage for last answerers
       console.log(`Applied last answerer penalty to active player ${answer.playerId}: ${answer.damage} damage`);
     }
   });
@@ -282,7 +247,7 @@ export async function GET(request: NextRequest) {
 
     const answerKey = `${eventId}-${questionId}`;
     const questionStartKey = `${eventId}-${questionId}-start`;
-    const answers = mockStorage.answers[answerKey] || [];
+    const answers = (mockStorage.answers[answerKey] || []) as Record<string, unknown>[];
     const currentTime = Date.now();
 
     // Calculate time remaining
@@ -307,8 +272,8 @@ export async function GET(request: NextRequest) {
       totalAnswers: answers.length,
       totalParticipants,
       correctAnswer: correctAnswers[questionId] || 0,
-      averageAnswer: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + a.answerValue, 0) / answers.length) : 0,
-      averageDamage: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + a.damage, 0) / answers.length) : 0,
+      averageAnswer: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + (Number(a.answerValue) || 0), 0) / answers.length) : 0,
+      averageDamage: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + (Number(a.damage) || 0), 0) / answers.length) : 0,
       timeRemaining,
       questionStartTime,
       extensionCount: questionExtensions[questionStartKey] ? Math.floor(questionExtensions[questionStartKey] / 1000) : 0,

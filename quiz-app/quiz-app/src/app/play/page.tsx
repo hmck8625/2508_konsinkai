@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function PlayPage() {
@@ -8,14 +8,14 @@ export default function PlayPage() {
   const [nickname, setNickname] = useState<string | null>(null);
   const [eventId, setEventId] = useState<string | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [gameState, setGameState] = useState<any>(null);
+  const [gameState, setGameState] = useState<Record<string, unknown> | null>(null);
   const [answerValue, setAnswerValue] = useState<string>('');
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [lastResult, setLastResult] = useState<any>(null);
+  const [lastResult, setLastResult] = useState<Record<string, unknown> | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
   const [isTimeUp, setIsTimeUp] = useState<boolean>(false);
-  const [currentQuestion, setCurrentQuestion] = useState<any>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<Record<string, unknown> | null>(null);
   const [playerStatus, setPlayerStatus] = useState<string>('active');
   const [playerLife, setPlayerLife] = useState<number>(100);
 
@@ -35,6 +35,39 @@ export default function PlayPage() {
     setNickname(storedNickname);
   }, [router]);
 
+  const handleTimeUpSubmit = useCallback(async () => {
+    if (!currentQuestion || !playerId || !eventId || hasAnswered) return;
+
+    try {
+      const response = await fetch('/api/answer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventId,
+          playerId,
+          questionId: (currentQuestion as Record<string, unknown>).id,
+          answerValue: 0,
+          answerTime: 60000, // Max time
+          minValue: Number((currentQuestion as Record<string, unknown>).minValue) || 0,
+          maxValue: Number((currentQuestion as Record<string, unknown>).maxValue) || 100,
+        }),
+      });
+
+      if (response.ok) {
+        await response.json();
+        setHasAnswered(true);
+        setLastResult({
+          yourAnswer: 0,
+          message: '時間切れのため、自動的に0で回答されました'
+        });
+      }
+    } catch (error) {
+      console.error('Failed to submit timeout answer:', error);
+    }
+  }, [currentQuestion, playerId, eventId, hasAnswered]);
+
   // Poll game state and answer stats for timer
   useEffect(() => {
     if (!eventId) return;
@@ -53,7 +86,7 @@ export default function PlayPage() {
               const participantsResponse = await fetch(`/api/participants?e=${eventId}`);
               if (participantsResponse.ok) {
                 const participantsData = await participantsResponse.json();
-                const currentPlayer = participantsData.participants.find((p: any) => p.playerId === playerId);
+                const currentPlayer = participantsData.participants.find((p: Record<string, unknown>) => p.playerId === playerId);
                 if (currentPlayer) {
                   setPlayerStatus(currentPlayer.status || 'active');
                   setPlayerLife(currentPlayer.life !== undefined ? currentPlayer.life : 100);
@@ -66,27 +99,27 @@ export default function PlayPage() {
           }
           
           // Reset answer state when question changes
-          if (data.currentQuestion && data.currentQuestion.id !== gameState?.currentQuestion?.id) {
-            console.log('Question changed, resetting answer state:', data.currentQuestion.id);
+          if ((data as Record<string, unknown>).currentQuestion && (data as Record<string, unknown>).currentQuestion !== (gameState as Record<string, unknown>)?.currentQuestion) {
+            console.log('Question changed, resetting answer state:', ((data as Record<string, unknown>).currentQuestion as Record<string, unknown>).id);
             setAnswerValue('');
             setHasAnswered(false);
             setLastResult(null);
             setIsTimeUp(false);
-            setCurrentQuestion(data.currentQuestion);
+            setCurrentQuestion((data as Record<string, unknown>).currentQuestion as Record<string, unknown>);
           }
 
           // Get real-time timer info if there's an active question
-          if (data.currentQuestion && data.status === 'active') {
+          if ((data as Record<string, unknown>).currentQuestion && (data as Record<string, unknown>).status === 'active') {
             try {
-              const answerResponse = await fetch(`/api/answer?e=${eventId}&q=${data.currentQuestion.id}`);
+              const answerResponse = await fetch(`/api/answer?e=${eventId}&q=${((data as Record<string, unknown>).currentQuestion as Record<string, unknown>).id}`);
               if (answerResponse.ok) {
                 const answerData = await answerResponse.json();
                 const remaining = Math.ceil(answerData.timeRemaining / 1000);
                 setTimeRemaining(Math.max(0, remaining));
                 
                 // Check if this player has already answered this question
-                if (answerData.answers && playerId) {
-                  const playerAnswer = answerData.answers.find((a: any) => a.playerId === playerId);
+                if ((answerData as Record<string, unknown>).answers && playerId) {
+                  const playerAnswer = ((answerData as Record<string, unknown>).answers as Record<string, unknown>[]).find((a: Record<string, unknown>) => a.playerId === playerId);
                   if (playerAnswer && !hasAnswered) {
                     console.log('Player has already answered this question:', playerAnswer);
                     setHasAnswered(true);
@@ -104,7 +137,7 @@ export default function PlayPage() {
                 }
               } else {
                 // If answer API fails, default to 60 seconds countdown from question start
-                const elapsed = Math.floor((Date.now() - (data.questionStartTime || Date.now())) / 1000);
+                const elapsed = Math.floor((Date.now() - (Number((data as Record<string, unknown>).questionStartTime) || Date.now())) / 1000);
                 const remaining = Math.max(0, 60 - elapsed);
                 setTimeRemaining(remaining);
                 
@@ -118,7 +151,7 @@ export default function PlayPage() {
               // Fallback: use basic countdown
               setTimeRemaining(Math.max(0, 60));
             }
-          } else if (data.status === 'lobby') {
+          } else if ((data as Record<string, unknown>).status === 'lobby') {
             // Reset timer and answer state when in lobby
             setTimeRemaining(60);
             setIsTimeUp(false);
@@ -136,43 +169,11 @@ export default function PlayPage() {
     pollGameState(); // Initial fetch
 
     return () => clearInterval(interval);
-  }, [eventId, gameState?.currentQuestion?.id]);
+  }, [eventId, gameState, hasAnswered, isTimeUp, playerId, handleTimeUpSubmit]);
 
-  const handleTimeUpSubmit = async () => {
-    if (!currentQuestion || !playerId || !eventId || hasAnswered) return;
-
-    try {
-      const response = await fetch('/api/answer', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          eventId,
-          playerId,
-          questionId: currentQuestion.id,
-          answerValue: 0,
-          answerTime: 60000, // Max time
-          minValue: currentQuestion.minValue || 0,
-          maxValue: currentQuestion.maxValue || 100,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setHasAnswered(true);
-        setLastResult({
-          yourAnswer: 0,
-          message: '時間切れのため、自動的に0で回答されました'
-        });
-      }
-    } catch (error) {
-      console.error('Failed to submit timeout answer:', error);
-    }
-  };
 
   const handleAnswerSubmit = async () => {
-    if (!answerValue.trim() || !gameState?.currentQuestion || !playerId || !eventId || hasAnswered || isTimeUp || playerStatus === 'eliminated') return;
+    if (!answerValue.trim() || !(gameState as Record<string, unknown>)?.currentQuestion || !playerId || !eventId || hasAnswered || isTimeUp || playerStatus === 'eliminated') return;
 
     const numericValue = parseInt(answerValue);
     if (isNaN(numericValue)) {
@@ -181,8 +182,9 @@ export default function PlayPage() {
     }
 
     // Check answer range
-    const minValue = gameState.currentQuestion.minValue || 0;
-    const maxValue = gameState.currentQuestion.maxValue || 100;
+    const currentQuestion = (gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>;
+    const minValue = Number(currentQuestion.minValue) || 0;
+    const maxValue = Number(currentQuestion.maxValue) || 100;
     
     if (numericValue < minValue || numericValue > maxValue) {
       alert(`回答は${minValue}から${maxValue}の範囲で入力してください`);
@@ -199,9 +201,9 @@ export default function PlayPage() {
         body: JSON.stringify({
           eventId,
           playerId,
-          questionId: gameState.currentQuestion.id,
+          questionId: currentQuestion.id,
           answerValue: numericValue,
-          answerTime: Date.now() - (gameState.questionStartTime || Date.now()),
+          answerTime: Date.now() - (Number((gameState as Record<string, unknown>).questionStartTime) || Date.now()),
           minValue,
           maxValue,
         }),
@@ -288,8 +290,7 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Game Status */}
-        {gameState?.status === 'lobby' && playerStatus !== 'eliminated' && (
+        {String((gameState as Record<string, unknown>)?.status) === 'lobby' && playerStatus !== 'eliminated' ? (
           <div className="bg-white rounded-lg shadow-lg p-6 text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">
               待機中
@@ -302,10 +303,9 @@ export default function PlayPage() {
               <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Active Question */}
-        {gameState?.status === 'active' && gameState?.currentQuestion && playerStatus !== 'eliminated' && (
+        {String((gameState as Record<string, unknown>)?.status) === 'active' && (gameState as Record<string, unknown>)?.currentQuestion && playerStatus !== 'eliminated' ? (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
 
             {/* Timer */}
@@ -335,18 +335,18 @@ export default function PlayPage() {
             {/* Question */}
             <div className="text-center mb-6">
               <h3 className="text-xl font-bold text-gray-800 mb-2">
-                {gameState.currentQuestion.title}
+                {String(((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).title)}
               </h3>
-              {gameState.currentQuestion.hint && (
+              {((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).hint ? (
                 <p className="text-sm text-gray-600 mt-2">
-                  {gameState.currentQuestion.hint}
+                  {String(((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).hint)}
                 </p>
-              )}
+              ) : null}
               
               {/* Answer range display */}
               <div className="mt-3 p-2 bg-blue-50 rounded-lg">
                 <p className="text-sm text-blue-700 font-medium">
-                  回答範囲: {gameState.currentQuestion.minValue || 0} ～ {gameState.currentQuestion.maxValue || 100}
+                  回答範囲: {Number(((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).minValue) || 0} ～ {Number(((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).maxValue) || 100}
                 </p>
               </div>
             </div>
@@ -365,25 +365,25 @@ export default function PlayPage() {
                       : 'border-blue-300 focus:border-blue-500'
                   }`}
                   placeholder="数値を入力"
-                  min={gameState.currentQuestion.minValue || 0}
-                  max={gameState.currentQuestion.maxValue || 100}
+                  min={Number(((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).minValue) || 0}
+                  max={Number(((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).maxValue) || 100}
                 />
               </div>
             </div>
 
             {/* Answer Submitted Display */}
-            {hasAnswered && lastResult && (
+            {hasAnswered && lastResult ? (
               <div className="mb-6 p-4 rounded-lg border-2 bg-blue-50 border-blue-200">
                 <div className="text-center">
                   <div className="text-lg font-bold mb-2 text-blue-800">
-                    送信した回答: {lastResult.yourAnswer}
+                    送信した回答: {String((lastResult as Record<string, unknown>).yourAnswer)}
                   </div>
                   <div className="text-sm text-blue-600">
-                    {lastResult.message}
+                    {String((lastResult as Record<string, unknown>).message)}
                   </div>
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Submit Button */}
             <div className="text-center">
@@ -413,7 +413,7 @@ export default function PlayPage() {
               )}
             </div>
           </div>
-        )}
+        ) : null}
 
 
         {/* Instructions */}

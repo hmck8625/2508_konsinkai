@@ -35,7 +35,7 @@ export class QuizService {
       }
 
       // Check if nickname exists and modify if needed
-      let nickname = request.nickname.trim();
+      const nickname = request.nickname.trim();
       if (!nickname) {
         return { success: false, error: 'ニックネームを入力してください' };
       }
@@ -94,7 +94,7 @@ export class QuizService {
         scoreDelta = 100; // Base score
 
         // Speed bonus
-        const config = await this.kvService.getEventStatus(request.eventId);
+        // const config = await this.kvService.getEventStatus(request.eventId);
         // TODO: Implement speed bonus calculation based on remaining time
 
         // Streak bonus
@@ -114,6 +114,9 @@ export class QuizService {
         timestamp,
         isCorrect,
         scoreDelta,
+        answerValue: request.choice,
+        damage: 0,
+        isLastAnswerer: false,
       };
 
       const submitted = await this.kvService.submitAnswer(request.eventId, request.questionId, answer);
@@ -154,7 +157,7 @@ export class QuizService {
       if (status !== 'lobby' && status !== 'results') {
         const questionId = this.extractQuestionIdFromStatus(status);
         if (questionId) {
-          currentQuestion = await this.kvService.getQuestion(eventId, questionId);
+          currentQuestion = await this.kvService.getQuestion(eventId, questionId) || undefined;
           
           if (status.endsWith('_reveal')) {
             const stats = await this.kvService.getQuestionStats(eventId, questionId);
@@ -198,7 +201,7 @@ export class QuizService {
     await this.kvService.setQuestion(eventId, questionId, question);
   }
 
-  async controlGame(eventId: string, action: string, questionId?: string, extendSeconds?: number): Promise<{success: boolean, status?: EventStatus, error?: string}> {
+  async controlGame(eventId: string, action: string, questionId?: string): Promise<{success: boolean, status?: EventStatus, error?: string}> {
     try {
       const currentStatus = await this.kvService.getEventStatus(eventId);
       if (!currentStatus) {
@@ -212,21 +215,21 @@ export class QuizService {
           if (!questionId) {
             return { success: false, error: '問題IDが必要です' };
           }
-          newStatus = `Q${questionId}_open`;
+          newStatus = `Q${questionId}_open` as EventStatus;
           break;
 
         case 'close':
           if (!questionId) {
             return { success: false, error: '問題IDが必要です' };
           }
-          newStatus = `Q${questionId}_closed`;
+          newStatus = `Q${questionId}_closed` as EventStatus;
           break;
 
         case 'reveal':
           if (!questionId) {
             return { success: false, error: '問題IDが必要です' };
           }
-          newStatus = `Q${questionId}_reveal`;
+          newStatus = `Q${questionId}_reveal` as EventStatus;
           break;
 
         case 'next':
@@ -266,7 +269,7 @@ export class QuizService {
 
   async exportData(eventId: string): Promise<string> {
     try {
-      const players = await this.getPlayers(eventId);
+      // const players = await this.getPlayers(eventId);
       const leaderboard = await this.kvService.getLeaderboard(eventId, 100);
       
       // Create CSV content

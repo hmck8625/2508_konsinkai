@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const answerKey = `${eventId}-${questionId}`;
-    const answers = mockStorage.answers[answerKey] || [];
+    const answers = (mockStorage.answers[answerKey] || []) as Record<string, unknown>[];
     const answer = answers.find(a => a.playerId === playerId);
 
     if (!answer) {
@@ -29,16 +29,16 @@ export async function POST(request: NextRequest) {
     // Apply damage to specific participant
     if (mockStorage.participants[eventId]) {
       const participantIndex = mockStorage.participants[eventId].findIndex(
-        p => p.playerId === playerId
+        p => (p as Record<string, unknown>).playerId === playerId
       );
       
       if (participantIndex >= 0) {
-        const participant = mockStorage.participants[eventId][participantIndex];
+        const participant = mockStorage.participants[eventId][participantIndex] as Record<string, unknown>;
         participant.lastDamage = answer.damage;
-        participant.totalDamage = (participant.totalDamage || 0) + answer.damage;
-        participant.life = Math.max(0, (participant.life || 100) - answer.damage);
+        participant.totalDamage = (Number(participant.totalDamage) || 0) + (answer.damage as number);
+        participant.life = Math.max(0, (Number(participant.life) || 100) - (answer.damage as number));
         
-        if (participant.life <= 0) {
+        if (Number(participant.life) <= 0) {
           participant.status = 'eliminated';
         }
 

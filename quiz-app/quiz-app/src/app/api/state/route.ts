@@ -29,16 +29,16 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const gameState = mockStorage.gameStates[eventId];
+    const gameState = mockStorage.gameStates[eventId] as Record<string, unknown>;
     
     // Ensure questions array is available
-    if (!gameState.questions || gameState.questions.length === 0) {
+    if (!(gameState.questions as unknown[]) || (gameState.questions as unknown[]).length === 0) {
       gameState.questions = mockQuestions;
     }
     
     // Set current question based on index (no automatic progression)
-    if (gameState.status === 'active' && gameState.currentQuestionIndex < gameState.questions.length) {
-      const mockQuestion = gameState.questions[gameState.currentQuestionIndex];
+    if (gameState.status === 'active' && (gameState.currentQuestionIndex as number) < (gameState.questions as unknown[]).length) {
+      const mockQuestion = (gameState.questions as Record<string, unknown>[])[gameState.currentQuestionIndex as number];
       gameState.currentQuestion = {
         id: mockQuestion.id,
         title: mockQuestion.title,
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const gameState = mockStorage.gameStates[eventId];
+    const gameState = mockStorage.gameStates[eventId] as Record<string, unknown>;
 
     switch (action) {
       case 'startGame':
@@ -102,8 +102,8 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'nextQuestion':
-        if (gameState.currentQuestionIndex < gameState.questions.length - 1) {
-          gameState.currentQuestionIndex++;
+        if ((gameState.currentQuestionIndex as number) < (gameState.questions as unknown[]).length - 1) {
+          gameState.currentQuestionIndex = (gameState.currentQuestionIndex as number) + 1;
           gameState.questionStartTime = Date.now();
         }
         break;

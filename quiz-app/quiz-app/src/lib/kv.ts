@@ -42,7 +42,7 @@ export class KVService {
   }
 
   async getEventStatus(eventId: string): Promise<EventStatus | null> {
-    return await kvClient.get(`event:${eventId}:status`);
+    return await kvClient.get(`event:${eventId}:status`) as EventStatus | null;
   }
 
   async setEventStatus(eventId: string, status: EventStatus): Promise<void> {
@@ -57,7 +57,7 @@ export class KVService {
   }
 
   async getQuestion(eventId: string, questionId: string): Promise<Question | null> {
-    return await kvClient.get(`event:${eventId}:q:${questionId}:meta`);
+    return await kvClient.get(`event:${eventId}:q:${questionId}:meta`) as Question | null;
   }
 
   // Player management
@@ -69,7 +69,7 @@ export class KVService {
   }
 
   async getPlayer(eventId: string, playerId: string): Promise<Player | null> {
-    return await kvClient.get(`event:${eventId}:player:${playerId}`);
+    return await kvClient.get(`event:${eventId}:player:${playerId}`) as Player | null;
   }
 
   async getPlayers(eventId: string): Promise<Player[]> {
@@ -102,7 +102,7 @@ export class KVService {
   }
 
   async getAnswer(eventId: string, questionId: string, playerId: string): Promise<Answer | null> {
-    return await kvClient.get(`event:${eventId}:q:${questionId}:answer:${playerId}`);
+    return await kvClient.get(`event:${eventId}:q:${questionId}:answer:${playerId}`) as Answer | null;
   }
 
   async getQuestionAnswers(eventId: string, questionId: string): Promise<Answer[]> {
@@ -168,7 +168,7 @@ export class KVService {
 
   async getPlayerTotalTime(eventId: string, playerId: string): Promise<number> {
     const time = await kvClient.get(`event:${eventId}:time:${playerId}`);
-    return time || 0;
+    return Number(time) || 0;
   }
 
   // Streak tracking
@@ -184,12 +184,12 @@ export class KVService {
     
     await kvClient.expire(streakKey, ttl);
     const streak = await kvClient.get(streakKey);
-    return streak || 0;
+    return Number(streak) || 0;
   }
 
   async getPlayerStreak(eventId: string, playerId: string): Promise<number> {
     const streak = await kvClient.get(`event:${eventId}:streak:${playerId}`);
-    return streak || 0;
+    return Number(streak) || 0;
   }
 
   // Speed tracking
@@ -237,7 +237,7 @@ export class KVService {
     return config?.ttlSeconds || 86400; // Default 24 hours
   }
 
-  async cleanup(eventId: string): Promise<void> {
+  async cleanup(): Promise<void> {
     // In a real implementation, you would need to scan and delete all keys
     // For now, relying on TTL for automatic cleanup
   }

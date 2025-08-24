@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function HostPage() {
   const [eventId, setEventId] = useState('');
   const [adminSecret, setAdminSecret] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<Record<string, unknown>[]>([]);
   const [newQuestion, setNewQuestion] = useState({
     title: '',
     choices: ['', '', '', ''],
@@ -15,8 +15,8 @@ export default function HostPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [gameState, setGameState] = useState<any>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [gameState, setGameState] = useState<Record<string, unknown> | null>(null);
+  const [participants, setParticipants] = useState<Record<string, unknown>[]>([]);
 
   const handleAuthenticate = () => {
     if (eventId && adminSecret) {
@@ -213,7 +213,7 @@ export default function HostPage() {
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
                 <div className="text-2xl font-bold text-green-600">
-                  {gameState?.status || 'lobby'}
+                  {String((gameState as Record<string, unknown>)?.status) || 'lobby'}
                 </div>
                 <div className="text-sm text-green-600">ゲーム状態</div>
               </div>
@@ -226,8 +226,8 @@ export default function HostPage() {
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {participants.map((participant, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
-                      <span>{participant.nickname}</span>
-                      <span className="text-gray-500">{new Date(participant.joinedAt).toLocaleTimeString()}</span>
+                      <span>{String((participant as Record<string, unknown>).nickname)}</span>
+                      <span className="text-gray-500">{new Date(String((participant as Record<string, unknown>).joinedAt)).toLocaleTimeString()}</span>
                     </div>
                   ))}
                 </div>
@@ -340,9 +340,9 @@ export default function HostPage() {
                 <div className="space-y-2 max-h-48 overflow-y-auto mb-4">
                   {questions.map((q, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded">
-                      <p className="font-medium">Q{index + 1}: {q.title}</p>
+                      <p className="font-medium">Q{index + 1}: {String((q as Record<string, unknown>).title)}</p>
                       <p className="text-sm text-gray-600">
-                        正解: {String.fromCharCode(65 + q.answerIndex)}. {q.choices[q.answerIndex]}
+                        正解: {String.fromCharCode(65 + Number((q as Record<string, unknown>).answerIndex))}. {((q as Record<string, unknown>).choices as string[])[Number((q as Record<string, unknown>).answerIndex)]}
                       </p>
                     </div>
                   ))}

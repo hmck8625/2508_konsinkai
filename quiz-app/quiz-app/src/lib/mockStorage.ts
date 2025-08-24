@@ -2,9 +2,9 @@
 // In production, this would be replaced with a database
 
 interface GlobalMockStorage {
-  gameStates: { [eventId: string]: any };
-  participants: { [eventId: string]: any[] };
-  answers: { [key: string]: any[] };
+  gameStates: { [eventId: string]: unknown };
+  participants: { [eventId: string]: unknown[] };
+  answers: { [key: string]: unknown[] };
 }
 
 const globalForMockStorage = globalThis as unknown as {
