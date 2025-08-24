@@ -247,21 +247,80 @@ export default function HostPage() {
               </button>
             </div>
 
-            {/* Mock Game Controls */}
+            {/* Game Controls */}
             <div className="mt-6 space-y-2">
-              <h3 className="font-bold text-gray-800">ゲーム進行（デモ）</h3>
+              <h3 className="font-bold text-gray-800">ゲーム進行</h3>
               <div className="flex flex-wrap gap-2">
-                <button className="bg-green-600 text-white px-3 py-2 rounded text-sm">
+                <button 
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eventId, action: 'startGame' })
+                      });
+                      const result = await response.json();
+                      console.log('🎮 Game started:', result);
+                      setMessage('ゲームを開始しました！');
+                    } catch (error) {
+                      console.error('Failed to start game:', error);
+                      setMessage('ゲーム開始に失敗しました');
+                    }
+                  }}
+                  className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700"
+                >
                   第1問開始
                 </button>
-                <button className="bg-red-600 text-white px-3 py-2 rounded text-sm">
-                  回答締切
+                <button 
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eventId, action: 'nextQuestion' })
+                      });
+                      setMessage('次の質問に進みました');
+                    } catch (error) {
+                      console.error('Failed to go to next question:', error);
+                    }
+                  }}
+                  className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
+                >
+                  次の問題
                 </button>
-                <button className="bg-blue-600 text-white px-3 py-2 rounded text-sm">
-                  正解発表
+                <button 
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eventId, action: 'endGame' })
+                      });
+                      setMessage('ゲームを終了しました');
+                    } catch (error) {
+                      console.error('Failed to end game:', error);
+                    }
+                  }}
+                  className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700"
+                >
+                  ゲーム終了
                 </button>
-                <button className="bg-purple-600 text-white px-3 py-2 rounded text-sm">
-                  最終結果
+                <button 
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eventId, action: 'resetGame' })
+                      });
+                      setMessage('ゲームをリセットしました');
+                    } catch (error) {
+                      console.error('Failed to reset game:', error);
+                    }
+                  }}
+                  className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700"
+                >
+                  リセット
                 </button>
               </div>
             </div>

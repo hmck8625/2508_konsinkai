@@ -78,6 +78,7 @@ export default function PlayPage() {
         const response = await fetch(`/api/state?e=${eventId}`);
         if (response.ok) {
           const data = await response.json();
+          console.log(`🎯 PLAY DEBUG Game state for ${eventId}:`, data.status, data.currentQuestion ? `question: ${data.currentQuestion.id}` : 'no question');
           setGameState(data);
 
           // Fetch current player status

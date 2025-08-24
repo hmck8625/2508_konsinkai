@@ -65,7 +65,9 @@ export async function POST(request: NextRequest) {
       mockStorage.participants[eventId].push(participantData);
     }
 
-    console.log(`Participant registered directly to mockStorage for event ${eventId}:`, participantData);
+    console.log(`🔥 DEBUG Participant registered directly to mockStorage for event ${eventId}:`, participantData);
+    console.log(`🔥 DEBUG Total participants after add:`, mockStorage.participants[eventId].length);
+    console.log(`🔥 DEBUG All participants in storage:`, JSON.stringify(mockStorage.participants[eventId], null, 2));
 
     const mockResponse = {
       success: true,

@@ -49,6 +49,10 @@ export async function GET(request: NextRequest) {
         maxValue: mockQuestion.maxValue || 100,
         correctAnswer: mockQuestion.correctAnswer
       };
+      
+      console.log(`⚡ DEBUG Game state for ${eventId}: status=${gameState.status}, questionIndex=${gameState.currentQuestionIndex}, currentQuestion=${JSON.stringify(gameState.currentQuestion, null, 2)}`);
+    } else {
+      console.log(`⚡ DEBUG Game state for ${eventId}: status=${gameState.status}, not active or no questions`);
     }
     
     // Update server time

@@ -35,6 +35,7 @@ function ScreenDisplay() {
         let stateData = null;
         if (stateResponse.ok) {
           stateData = await stateResponse.json();
+          console.log(`📺 SCREEN DEBUG Game state for ${eventId}:`, stateData.status, stateData.currentQuestion ? `question: ${stateData.currentQuestion.id}` : 'no question');
           
           // Check if question changed - only reset results state if we're moving to a new question
           const oldQuestionId = ((gameState as Record<string, unknown>)?.currentQuestion as Record<string, unknown>)?.id;
@@ -56,7 +57,10 @@ function ScreenDisplay() {
         const participantsResponse = await fetch(`/api/participants?e=${eventId}`);
         if (participantsResponse.ok) {
           const participantsData = await participantsResponse.json();
+          console.log(`📱 SCREEN DEBUG Participants for ${eventId}:`, participantsData.participants.length, 'participants');
           setParticipants(participantsData.participants || []);
+        } else {
+          console.error('Failed to fetch participants:', participantsResponse.status);
         }
 
         // Fetch answer stats only if there's an active question, it has an ID, and results haven't been shown yet

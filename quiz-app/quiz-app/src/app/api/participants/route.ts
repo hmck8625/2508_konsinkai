@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     // Get mock participants for this event
     const participants = mockStorage.participants[eventId] || [];
 
-    console.log(`Participants for event ${eventId}:`, participants);
+    console.log(`📊 DEBUG Participants for event ${eventId}:`, participants.length, 'participants');
+    console.log(`📊 DEBUG Full participants data:`, JSON.stringify(participants, null, 2));
 
     return NextResponse.json({
       participants,
