@@ -25,17 +25,17 @@ export async function POST(request: NextRequest) {
 
     // Check if participant already exists with same deviceId AND nickname
     const existingIndex = mockStorage.participants[eventId].findIndex(p => 
-      (p as Record<string, unknown>).deviceId === body.deviceId && (p as Record<string, unknown>).nickname === body.nickname.trim()
+      p.deviceId === body.deviceId && p.nickname === body.nickname.trim()
     );
     
     // If same device but different nickname, allow as new participant (different browser/session)
     let finalNickname = body.nickname.trim();
-    const nicknameExists = mockStorage.participants[eventId].some(p => (p as Record<string, unknown>).nickname === finalNickname);
+    const nicknameExists = mockStorage.participants[eventId].some(p => p.nickname === finalNickname);
     
     // If nickname exists but not same device, modify nickname
     if (nicknameExists && existingIndex === -1) {
       let counter = 2;
-      while (mockStorage.participants[eventId].some(p => (p as Record<string, unknown>).nickname === `${finalNickname}_${counter}`)) {
+      while (mockStorage.participants[eventId].some(p => p.nickname === `${finalNickname}_${counter}`)) {
         counter++;
       }
       finalNickname = `${finalNickname}_${counter}`;
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     if (existingIndex >= 0) {
       // Update existing participant (same device, same nickname)
       mockStorage.participants[eventId][existingIndex] = {
-        ...(mockStorage.participants[eventId][existingIndex] as Record<string, unknown>),
+        ...mockStorage.participants[eventId][existingIndex],
         playerId, // Generate new playerId for rejoining
         joinedAt: new Date().toISOString(),
         status: 'active'

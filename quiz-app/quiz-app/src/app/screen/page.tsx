@@ -1,5 +1,6 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
@@ -7,7 +8,7 @@ function ScreenDisplay() {
   const searchParams = useSearchParams();
   const [eventId, setEventId] = useState('');
   const [gameState, setGameState] = useState<Record<string, unknown> | null>(null);
-  const [participants, setParticipants] = useState<Record<string, unknown>[]>([]);
+  const [participants, setParticipants] = useState<any[]>([]);
   const [answerStats, setAnswerStats] = useState<Record<string, unknown> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showingResults, setShowingResults] = useState(false);
@@ -32,14 +33,14 @@ function ScreenDisplay() {
       try {
         // Fetch game state
         const stateResponse = await fetch(`/api/state?e=${eventId}`);
-        let stateData = null;
+        let stateData: any = null;
         if (stateResponse.ok) {
           stateData = await stateResponse.json();
           console.log(`📺 SCREEN DEBUG Game state for ${eventId}:`, stateData.status, stateData.currentQuestion ? `question: ${stateData.currentQuestion.id}` : 'no question');
           
           // Check if question changed - only reset results state if we're moving to a new question
-          const oldQuestionId = ((gameState as Record<string, unknown>)?.currentQuestion as Record<string, unknown>)?.id;
-          const newQuestionId = ((stateData as Record<string, unknown>)?.currentQuestion as Record<string, unknown>)?.id;
+          const oldQuestionId = (gameState as any)?.currentQuestion?.id;
+          const newQuestionId = (stateData as any)?.currentQuestion?.id;
           
           // Only reset state when we have a clear question change (both old and new exist and are different)
           if (oldQuestionId && newQuestionId && oldQuestionId !== newQuestionId) {
@@ -64,7 +65,7 @@ function ScreenDisplay() {
         }
 
         // Fetch answer stats only if there's an active question, it has an ID, and results haven't been shown yet
-        const currentQuestionId = ((stateData as Record<string, unknown>)?.currentQuestion as Record<string, unknown>)?.id;
+        const currentQuestionId = stateData?.currentQuestion?.id;
         if (stateData && 
             (stateData as Record<string, unknown>).status === 'active' && 
             currentQuestionId &&
@@ -352,7 +353,7 @@ function ScreenDisplay() {
         <p className="text-2xl opacity-90">イベントID: {eventId}</p>
       </div>
 
-      {String((gameState as Record<string, unknown>)?.status) === 'lobby' ? (
+      {gameState?.status === 'lobby' ? (
         <div className="text-center py-20">
           <div className="max-w-4xl mx-auto">
             <h2 className="text-6xl font-bold mb-8">
@@ -391,14 +392,14 @@ function ScreenDisplay() {
       ) : null}
 
       {/* Active Question Display */}
-      {String((gameState as Record<string, unknown>)?.status) === 'active' && (gameState as Record<string, unknown>)?.currentQuestion ? (
+      {gameState?.status === 'active' && (gameState as Record<string, unknown>)?.currentQuestion ? (
         <div className="py-12">
           <div className="max-w-6xl mx-auto px-8">
 
             {/* Question Title and Timer */}
             <div className="text-center mb-12">
               <h3 className="text-4xl font-bold mb-6">
-                {String(((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).title)}
+                {(gameState as any).currentQuestion.title}
               </h3>
               
               {/* Real-time Timer Display */}
@@ -406,10 +407,10 @@ function ScreenDisplay() {
                 <div className="text-center">
                   <div className="text-2xl text-white font-bold mb-2">残り時間</div>
                   <div className={`text-8xl font-bold ${
-                    (Number((answerStats as Record<string, unknown>)?.timeRemaining) / 1000) <= 10 ? 'text-red-400 animate-pulse' : 
-                    (Number((answerStats as Record<string, unknown>)?.timeRemaining) / 1000) <= 30 ? 'text-yellow-400' : 'text-green-400'
+                    ((answerStats as any)?.timeRemaining / 1000) <= 10 ? 'text-red-400 animate-pulse' : 
+                    ((answerStats as any)?.timeRemaining / 1000) <= 30 ? 'text-yellow-400' : 'text-green-400'
                   }`}>
-                    {Math.max(0, Math.ceil((Number((answerStats as Record<string, unknown>)?.timeRemaining) || 0) / 1000))}
+                    {Math.max(0, Math.ceil(((answerStats as any)?.timeRemaining || 0) / 1000))}
                   </div>
                   <div className="text-xl text-white font-bold">秒</div>
                   
@@ -417,17 +418,17 @@ function ScreenDisplay() {
                   <div className="w-full bg-gray-600 rounded-full h-4 mt-4">
                     <div 
                       className={`h-4 rounded-full transition-all duration-1000 ${
-                        (Number((answerStats as Record<string, unknown>)?.timeRemaining) / 1000) <= 10 ? 'bg-red-400' : 
-                        (Number((answerStats as Record<string, unknown>)?.timeRemaining) / 1000) <= 30 ? 'bg-yellow-400' : 'bg-green-400'
+                        ((answerStats as any)?.timeRemaining / 1000) <= 10 ? 'bg-red-400' : 
+                        ((answerStats as any)?.timeRemaining / 1000) <= 30 ? 'bg-yellow-400' : 'bg-green-400'
                       }`}
-                      style={{ width: `${Math.max(0, ((Number((answerStats as Record<string, unknown>)?.timeRemaining) || 0) / 1000) / 60 * 100)}%` }}
+                      style={{ width: `${Math.max(0, (((answerStats as any)?.timeRemaining || 0) / 1000) / 60 * 100)}%` }}
                     ></div>
                   </div>
                   
                   {/* Extension info */}
-                  {Number((answerStats as Record<string, unknown>)?.extensionCount) > 0 ? (
+                  {(answerStats as any)?.extensionCount > 0 ? (
                     <div className="mt-3 text-lg text-blue-300">
-                      延長: +{String((answerStats as Record<string, unknown>).extensionCount)}秒
+                      延長: +{(answerStats as any).extensionCount}秒
                     </div>
                   ) : null}
                 </div>
@@ -448,17 +449,17 @@ function ScreenDisplay() {
                 <div className="text-center">
                   <div className="text-xl text-white font-bold mb-2">回答状況</div>
                   <div className="text-4xl font-bold text-purple-400 mb-2">
-                    {Number((answerStats as Record<string, unknown>)?.totalAnswers) || 0} / {participants.length}
+                    {(answerStats as any)?.totalAnswers || 0} / {participants.length}
                   </div>
                   <div className="text-lg text-white font-bold">
-                    {participants.length > 0 ? Math.round(((Number((answerStats as Record<string, unknown>)?.totalAnswers) || 0) / participants.length) * 100) : 0}% 完了
+                    {participants.length > 0 ? Math.round((((answerStats as any)?.totalAnswers || 0) / participants.length) * 100) : 0}% 完了
                   </div>
                   
                   {/* Answer Progress Bar */}
                   <div className="w-full bg-gray-600 rounded-full h-3 mt-3">
                     <div 
                       className="h-3 bg-purple-400 rounded-full transition-all duration-500"
-                      style={{ width: `${participants.length > 0 ? ((Number((answerStats as Record<string, unknown>)?.totalAnswers) || 0) / participants.length) * 100 : 0}%` }}
+                      style={{ width: `${participants.length > 0 ? (((answerStats as any)?.totalAnswers || 0) / participants.length) * 100 : 0}%` }}
                     ></div>
                   </div>
                 </div>
@@ -534,22 +535,22 @@ function ScreenDisplay() {
                 <h3 className="text-3xl font-bold text-center mb-6 text-white">参加者ライフ状況</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {participants.map((participant) => {
-                    const isAnimating = animatingParticipant === String((participant as Record<string, unknown>).playerId);
+                    const isAnimating = animatingParticipant === participant.playerId;
                     const isCurrentResult = showingResults && participants.filter(p => 
-                      ((resultStats || answerStats) as Record<string, unknown>)?.answers && 
-                      (((resultStats || answerStats) as Record<string, unknown>).answers as Record<string, unknown>[])?.some((a: Record<string, unknown>) => a.playerId === (p as Record<string, unknown>).playerId)
+                      (resultStats || answerStats)?.answers && 
+                      ((resultStats || answerStats) as any)?.answers?.some((a: any) => a.playerId === p.playerId)
                     ).indexOf(participant) === currentResultIndex;
                     // Prioritize resultStats for persistent display, fallback to answerStats for real-time
-                    const answer = ((resultStats as Record<string, unknown>)?.answers as Record<string, unknown>[])?.find((a: Record<string, unknown>) => a.playerId === (participant as Record<string, unknown>).playerId) || 
-                                   ((answerStats as Record<string, unknown>)?.answers as Record<string, unknown>[])?.find((a: Record<string, unknown>) => a.playerId === (participant as Record<string, unknown>).playerId);
+                    const answer = ((resultStats as any)?.answers)?.find((a: any) => a.playerId === participant.playerId) || 
+                                   ((answerStats as any)?.answers)?.find((a: any) => a.playerId === participant.playerId);
                     
                     return (
                       <div 
-                        key={String((participant as Record<string, unknown>).playerId)} 
+                        key={participant.playerId} 
                         className={`bg-white bg-opacity-10 rounded-lg p-4 text-center transition-all duration-500 relative ${
                           isCurrentResult ? 'ring-4 ring-yellow-400 scale-105 bg-opacity-20' : ''
                         } ${isAnimating ? 'animate-pulse scale-110' : ''} ${
-                          (participant as Record<string, unknown>).status === 'eliminated' ? 'opacity-60 bg-gray-500 bg-opacity-30' : ''
+                          participant.status === 'eliminated' ? 'opacity-60 bg-gray-500 bg-opacity-30' : ''
                         }`}
                         style={{ zIndex: isAnimating ? 30 : 'auto' }}
                       >
@@ -557,34 +558,34 @@ function ScreenDisplay() {
                         {isAnimating && answer && (
                           <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 z-30 animate-bounce">
                             <div className={`px-4 py-2 rounded-xl font-bold text-2xl shadow-2xl border-4 ${
-                              (answer as Record<string, unknown>).isLastAnswerer 
+                              answer.isLastAnswerer 
                                 ? 'bg-yellow-100 text-yellow-900 border-yellow-500 animate-pulse' 
                                 : 'bg-red-100 text-red-900 border-red-500'
                             }`}
                             style={{ animationDuration: '0.8s', animationIterationCount: '6' }}>
-                              -{String((answer as Record<string, unknown>).damage)}
-                              {Boolean((answer as Record<string, unknown>).isLastAnswerer) && (
+                              -{answer.damage}
+                              {answer.isLastAnswerer && (
                                 <div className="text-sm text-yellow-700 mt-1 font-black">⚡ 2倍！</div>
                               )}
                             </div>
                           </div>
                         )}
-                        <div className="text-lg font-bold mb-2 text-gray-900 bg-white bg-opacity-90 rounded px-2 py-1">{String((participant as Record<string, unknown>).nickname)}</div>
+                        <div className="text-lg font-bold mb-2 text-gray-900 bg-white bg-opacity-90 rounded px-2 py-1">{participant.nickname}</div>
                         
                         
                         
                         {/* Show answer info during results (highlight during animation) */}
                         {isCurrentResult && answer && (
                           <div className="mb-3 p-2 bg-black bg-opacity-30 rounded text-sm border-2 border-yellow-400">
-                            <div className="text-white">回答: {String((answer as Record<string, unknown>).answerValue)}</div>
+                            <div className="text-white">回答: {answer.answerValue}</div>
                             <div className="text-white">正解: {String(((resultStats || answerStats) as Record<string, unknown>)?.correctAnswer)}</div>
                             <div className={`font-bold ${
-                              Boolean((answer as Record<string, unknown>).isLastAnswerer) ? 
+                              answer.isLastAnswerer ? 
                                 'text-yellow-300 animate-pulse' : 
                                 'text-red-400'
                             }`}>
-                              ダメージ: {String((answer as Record<string, unknown>).damage)}
-                              {Boolean((answer as Record<string, unknown>).isLastAnswerer) && (
+                              ダメージ: {answer.damage}
+                              {answer.isLastAnswerer && (
                                 <div className="text-xs text-yellow-200 animate-bounce mt-1">
                                   ⚡ 最終回答者 2倍ダメージ！
                                 </div>
@@ -597,12 +598,12 @@ function ScreenDisplay() {
                         {hasShownResults && answer && !isCurrentResult && (
                           <div className="mb-3 p-2 bg-gray-800 bg-opacity-50 rounded text-sm border border-gray-400">
                             <div className="text-gray-300 text-xs">この問題での結果:</div>
-                            <div className="text-white text-sm">回答: {String((answer as Record<string, unknown>).answerValue)}</div>
+                            <div className="text-white text-sm">回答: {answer.answerValue}</div>
                             <div className={`font-bold text-sm ${
-                              Boolean((answer as Record<string, unknown>).isLastAnswerer) ? 'text-yellow-400' : 'text-red-400'
+                              answer.isLastAnswerer ? 'text-yellow-400' : 'text-red-400'
                             }`}>
-                              -{String((answer as Record<string, unknown>).damage)}
-                              {Boolean((answer as Record<string, unknown>).isLastAnswerer) && (
+                              -{answer.damage}
+                              {answer.isLastAnswerer && (
                                 <span className="text-xs text-yellow-300 ml-1">⚡2倍</span>
                               )}
                             </div>
@@ -613,12 +614,12 @@ function ScreenDisplay() {
                           <div className={`text-3xl font-bold transition-all duration-500 ${
                             isAnimating && Boolean((answer as Record<string, unknown>)?.isLastAnswerer) ? 'text-yellow-300 scale-150 animate-pulse' :
                             isAnimating ? 'text-red-500 scale-125' : 
-                            (participant as Record<string, unknown>).status === 'eliminated' ? 'text-gray-400' :
-                            (Number((participant as Record<string, unknown>).life) !== undefined ? Number((participant as Record<string, unknown>).life) : 100) > 50 ? 'text-green-400' 
-                            : (Number((participant as Record<string, unknown>).life) !== undefined ? Number((participant as Record<string, unknown>).life) : 100) > 20 ? 'text-yellow-400'
+                            participant.status === 'eliminated' ? 'text-gray-400' :
+                            (participant.life !== undefined ? participant.life : 100) > 50 ? 'text-green-400' 
+                            : (participant.life !== undefined ? participant.life : 100) > 20 ? 'text-yellow-400'
                             : 'text-red-400'
                           }`}>
-                            {Number((participant as Record<string, unknown>).life) !== undefined ? Number((participant as Record<string, unknown>).life) : 100}
+                            {participant.life !== undefined ? participant.life : 100}
                           </div>
                           <div className="text-sm opacity-75 text-black font-bold">HP</div>
                         </div>
@@ -627,12 +628,12 @@ function ScreenDisplay() {
                         <div className="w-full bg-gray-600 rounded-full h-3 relative overflow-hidden">
                           <div 
                             className={`h-3 rounded-full transition-all duration-1000 ${
-                              (participant as Record<string, unknown>).status === 'eliminated' ? 'bg-gray-400' :
-                              (Number((participant as Record<string, unknown>).life) !== undefined ? Number((participant as Record<string, unknown>).life) : 100) > 50 ? 'bg-green-400' 
-                              : (Number((participant as Record<string, unknown>).life) !== undefined ? Number((participant as Record<string, unknown>).life) : 100) > 20 ? 'bg-yellow-400'
+                              participant.status === 'eliminated' ? 'bg-gray-400' :
+                              (participant.life !== undefined ? participant.life : 100) > 50 ? 'bg-green-400' 
+                              : (participant.life !== undefined ? participant.life : 100) > 20 ? 'bg-yellow-400'
                               : 'bg-red-400'
                             }`}
-                            style={{ width: `${Number((participant as Record<string, unknown>).life) !== undefined ? Number((participant as Record<string, unknown>).life) : 100}%` }}
+                            style={{ width: `${participant.life !== undefined ? participant.life : 100}%` }}
                           ></div>
                           
                           {/* Damage animation overlay */}
@@ -659,7 +660,7 @@ function ScreenDisplay() {
                         </div>
                         
                         {/* Elimination status */}
-                        {((participant as Record<string, unknown>).status === 'eliminated' || (Number((participant as Record<string, unknown>).life) !== undefined && Number((participant as Record<string, unknown>).life) <= 0)) && (
+                        {(participant.status === 'eliminated' || (participant.life !== undefined && participant.life <= 0)) && (
                           <div className="mt-2 text-gray-400 font-bold text-sm">
                             💀 ELIMINATED
                           </div>
@@ -674,7 +675,7 @@ function ScreenDisplay() {
             {/* Battle Stats */}
             <div className="text-center mt-8">
               <div className="text-2xl mb-4">
-                回答済み: <span className="font-bold">{Number((answerStats as Record<string, unknown>)?.totalAnswers) || 0}</span>人 
+                回答済み: <span className="font-bold">{(answerStats as any)?.totalAnswers || 0}</span>人 
                 / 参加者: <span className="font-bold">{participants.length}</span>人
               </div>
               
@@ -686,21 +687,21 @@ function ScreenDisplay() {
                   </div>
                   <div className="text-lg mb-2">
                     {currentResultIndex + 1} / {participants.filter(p => 
-                      (((resultStats || answerStats) as Record<string, unknown>)?.answers as Record<string, unknown>[])?.some((a: Record<string, unknown>) => String(a.playerId) === String((p as Record<string, unknown>).playerId))
+                      ((resultStats || answerStats) as any)?.answers?.some((a: any) => String(a.playerId) === String(p.playerId))
                     ).length} 人目
                   </div>
                   
                   {/* Show 2x damage indicator for current player */}
                   {(() => {
                     const answeredParticipants = participants.filter(p => 
-                      (((resultStats || answerStats) as Record<string, unknown>)?.answers as Record<string, unknown>[])?.some((a: Record<string, unknown>) => String(a.playerId) === String((p as Record<string, unknown>).playerId))
+                      ((resultStats || answerStats) as any)?.answers?.some((a: any) => String(a.playerId) === String(p.playerId))
                     );
                     const currentParticipant = answeredParticipants[currentResultIndex];
-                    const currentAnswer = (((resultStats || answerStats) as Record<string, unknown>)?.answers as Record<string, unknown>[])?.find((a: Record<string, unknown>) => 
-                      String(a.playerId) === String((currentParticipant as Record<string, unknown>)?.playerId)
+                    const currentAnswer = ((resultStats || answerStats) as any)?.answers?.find((a: any) => 
+                      String(a.playerId) === String(currentParticipant?.playerId)
                     );
                     
-                    return Boolean((currentAnswer as Record<string, unknown>)?.isLastAnswerer) && (
+                    return Boolean(currentAnswer?.isLastAnswerer) && (
                       <div className="text-center">
                         <div className="inline-flex items-center px-3 py-1 bg-yellow-400 bg-opacity-30 rounded-full border border-yellow-300">
                           <span className="text-yellow-200 font-bold text-sm animate-pulse">

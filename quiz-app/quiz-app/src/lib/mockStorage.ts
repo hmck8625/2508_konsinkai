@@ -1,23 +1,45 @@
 // Mock storage shared between API routes using globalThis
 // In production, this would be replaced with a database
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 interface GlobalMockStorage {
-  gameStates: { [eventId: string]: unknown };
-  participants: { [eventId: string]: unknown[] };
-  answers: { [key: string]: unknown[] };
+  gameStates: { [eventId: string]: any };
+  participants: { [eventId: string]: any[] };
+  answers: { [key: string]: any[] };
 }
 
-const globalForMockStorage = globalThis as unknown as {
-  mockStorage: GlobalMockStorage | undefined;
-};
+// より安定したストレージアクセスパターン
+function getGlobalStorage(): GlobalMockStorage {
+  const globalForMockStorage = globalThis as unknown as {
+    mockStorage: GlobalMockStorage | undefined;
+  };
 
-export const mockStorage = globalForMockStorage.mockStorage ?? {
-  gameStates: {},
-  participants: {},
-  answers: {},
-};
+  if (!globalForMockStorage.mockStorage) {
+    console.log('🔄 STORAGE DEBUG: Creating new mockStorage instance');
+    globalForMockStorage.mockStorage = {
+      gameStates: {},
+      participants: {},
+      answers: {},
+    };
+  } else {
+    console.log('🔗 STORAGE DEBUG: Reusing existing mockStorage');
+  }
 
-globalForMockStorage.mockStorage = mockStorage;
+  return globalForMockStorage.mockStorage;
+}
+
+// プロキシを使用してアクセス時に常に最新のストレージを取得
+export const mockStorage = new Proxy({} as GlobalMockStorage, {
+  get(target, prop: keyof GlobalMockStorage) {
+    const storage = getGlobalStorage();
+    return storage[prop];
+  },
+  set(target, prop: keyof GlobalMockStorage, value) {
+    const storage = getGlobalStorage();
+    storage[prop] = value;
+    return true;
+  }
+});
 
 // Battle Quiz questions - numerical answers (no time limits)
 export const mockQuestions = [

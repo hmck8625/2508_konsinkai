@@ -1,5 +1,6 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -87,7 +88,7 @@ export default function PlayPage() {
               const participantsResponse = await fetch(`/api/participants?e=${eventId}`);
               if (participantsResponse.ok) {
                 const participantsData = await participantsResponse.json();
-                const currentPlayer = participantsData.participants.find((p: Record<string, unknown>) => p.playerId === playerId);
+                const currentPlayer = participantsData.participants.find((p: any) => p.playerId === playerId);
                 if (currentPlayer) {
                   setPlayerStatus(currentPlayer.status || 'active');
                   setPlayerLife(currentPlayer.life !== undefined ? currentPlayer.life : 100);

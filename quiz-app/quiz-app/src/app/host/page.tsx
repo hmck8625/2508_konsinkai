@@ -274,7 +274,7 @@ export default function HostPage() {
                 <button 
                   onClick={async () => {
                     try {
-                      const response = await fetch('/api/state', {
+                      await fetch('/api/state', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ eventId, action: 'nextQuestion' })
@@ -291,7 +291,7 @@ export default function HostPage() {
                 <button 
                   onClick={async () => {
                     try {
-                      const response = await fetch('/api/state', {
+                      await fetch('/api/state', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ eventId, action: 'endGame' })
@@ -308,7 +308,7 @@ export default function HostPage() {
                 <button 
                   onClick={async () => {
                     try {
-                      const response = await fetch('/api/state', {
+                      await fetch('/api/state', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ eventId, action: 'resetGame' })

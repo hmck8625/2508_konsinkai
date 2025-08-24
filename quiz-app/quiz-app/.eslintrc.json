@@ -1,0 +1,11 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "overrides": [
+    {
+      "files": ["src/lib/mockStorage.ts", "src/app/screen/page.tsx", "src/app/play/page.tsx"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ]
+}

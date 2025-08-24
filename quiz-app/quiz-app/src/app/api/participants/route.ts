@@ -15,9 +15,15 @@ export async function GET(request: NextRequest) {
 
     // Get mock participants for this event
     const participants = mockStorage.participants[eventId] || [];
-
+    
+    // ストレージの状態をデバッグ
+    console.log(`🔍 STORAGE DEBUG: mockStorage.participants keys:`, Object.keys(mockStorage.participants));
+    console.log(`🔍 STORAGE DEBUG: eventId '${eventId}' exists:`, eventId in mockStorage.participants);
     console.log(`📊 DEBUG Participants for event ${eventId}:`, participants.length, 'participants');
-    console.log(`📊 DEBUG Full participants data:`, JSON.stringify(participants, null, 2));
+    
+    if (participants.length === 0) {
+      console.log(`⚠️  WARNING: No participants found for event ${eventId} - storage may have been reset`);
+    }
 
     return NextResponse.json({
       participants,
@@ -51,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if participant already exists
-    const existingIndex = mockStorage.participants[eventId].findIndex(p => (p as Record<string, unknown>).playerId === playerId);
+    const existingIndex = mockStorage.participants[eventId].findIndex(p => p.playerId === playerId);
     
     const participantData = {
       playerId,
@@ -103,15 +109,15 @@ export async function PUT(request: NextRequest) {
 
     // Find participant and update life
     if (mockStorage.participants[eventId]) {
-      const participantIndex = mockStorage.participants[eventId].findIndex(p => (p as Record<string, unknown>).playerId === playerId);
+      const participantIndex = mockStorage.participants[eventId].findIndex(p => p.playerId === playerId);
       
       if (participantIndex >= 0) {
-        const participant = mockStorage.participants[eventId][participantIndex] as Record<string, unknown>;
+        const participant = mockStorage.participants[eventId][participantIndex];
         participant.lastDamage = damage;
-        participant.totalDamage = (Number(participant.totalDamage) || 0) + damage;
-        participant.life = Math.max(0, (Number(participant.life) || 100) - damage);
+        participant.totalDamage = (participant.totalDamage || 0) + damage;
+        participant.life = Math.max(0, (participant.life || 100) - damage);
         
-        if (Number(participant.life) <= 0) {
+        if (participant.life <= 0) {
           participant.status = 'eliminated';
         }
 
