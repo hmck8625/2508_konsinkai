@@ -12,9 +12,20 @@ class KVStorage {
   private localCache: StorageData;
   
   constructor() {
+    // REDIS_URLがある場合、環境変数を設定してKVクライアントが利用できるようにする
+    if (process.env.REDIS_URL && !process.env.KV_REST_API_URL) {
+      // REDIS_URLをパースしてKV環境変数を設定
+      const redisUrl = new URL(process.env.REDIS_URL);
+      process.env.KV_REST_API_URL = process.env.REDIS_URL;
+      // パスワードがある場合はトークンとして使用
+      if (redisUrl.password) {
+        process.env.KV_REST_API_TOKEN = redisUrl.password;
+      }
+    }
+    
     // KV環境変数の存在確認 (従来形式とMarketplace形式の両方をサポート)
-    const hasKVUrl = !!(process.env.KV_REST_API_URL || process.env.REDIS_URL);
-    const hasKVToken = !!(process.env.KV_REST_API_TOKEN || process.env.REDIS_URL); // REDIS_URLはトークンも含む
+    const hasKVUrl = !!(process.env.KV_REST_API_URL);
+    const hasKVToken = !!(process.env.KV_REST_API_TOKEN);
     this.isKVAvailable = hasKVUrl && hasKVToken;
     
     this.localCache = {
