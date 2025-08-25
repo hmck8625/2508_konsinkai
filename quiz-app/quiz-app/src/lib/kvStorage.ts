@@ -9,13 +9,12 @@ interface StorageData {
 }
 
 class KVStorage {
-  private isKVAvailable: boolean;
+  private isKVAvailable: boolean = false;
   private localCache: StorageData;
-  private useRedis: boolean;
+  private useRedis: boolean = false;
   private redisClient: any;
   
   constructor() {
-    this.useRedis = false;
     
     // REDIS_URLがある場合、Redis Cloudクライアントを使用
     if (process.env.REDIS_URL && !process.env.KV_REST_API_URL) {
@@ -32,12 +31,14 @@ class KVStorage {
       });
       
       // Redis接続を確立
-      this.redisClient.connect().catch((err: any) => {
+      this.redisClient.connect().then(() => {
+        console.log('Redis connected successfully');
+        this.isKVAvailable = true;
+      }).catch((err: any) => {
         console.error('Redis Connection Error:', err);
         this.useRedis = false;
+        this.isKVAvailable = false;
       });
-      
-      this.isKVAvailable = true; // Redisが利用可能
     } else {
       // KV環境変数の存在確認 (従来形式とMarketplace形式の両方をサポート)
       const hasKVUrl = !!(process.env.KV_REST_API_URL);

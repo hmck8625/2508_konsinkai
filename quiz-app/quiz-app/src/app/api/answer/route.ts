@@ -29,14 +29,15 @@ export async function POST(request: NextRequest) {
     const currentTime = Date.now();
 
     // Check if question has started and get start time from game state
-    const gameStateResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/state?e=${eventId}`);
     let questionStartTime = currentTime - 5000; // Default fallback
     
-    if (gameStateResponse.ok) {
-      const gameState = await gameStateResponse.json();
-      if (gameState.questionStartTime) {
+    try {
+      const gameState = await kvStorage.getGameState(eventId);
+      if (gameState?.questionStartTime) {
         questionStartTime = gameState.questionStartTime;
       }
+    } catch (error) {
+      console.error('Failed to get game state:', error);
     }
 
     // Calculate time limit (60 seconds for now, extensions can be added later)
@@ -267,18 +268,15 @@ export async function GET(request: NextRequest) {
     let questionStartTime = 0;
     
     try {
-      const gameStateResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/state?e=${eventId}`);
-      if (gameStateResponse.ok) {
-        const gameState = await gameStateResponse.json();
-        if (gameState.questionStartTime) {
-          questionStartTime = gameState.questionStartTime;
-          const baseTimeLimit = 60 * 1000; // 60 seconds
-          const elapsedTime = currentTime - questionStartTime;
-          timeRemaining = Math.max(0, baseTimeLimit - elapsedTime);
-        }
+      const gameState = await kvStorage.getGameState(eventId);
+      if (gameState?.questionStartTime) {
+        questionStartTime = gameState.questionStartTime;
+        const baseTimeLimit = 60 * 1000; // 60 seconds
+        const elapsedTime = currentTime - questionStartTime;
+        timeRemaining = Math.max(0, baseTimeLimit - elapsedTime);
       }
     } catch (error) {
-      console.error('Failed to fetch game state for timer:', error);
+      console.error('Failed to get game state for timer:', error);
     }
     const totalParticipants = allParticipants.length;
 
