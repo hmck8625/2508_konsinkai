@@ -100,14 +100,19 @@ export default function PlayPage() {
             }
           }
           
-          // Reset answer state when question changes
-          if ((data as Record<string, unknown>).currentQuestion && (data as Record<string, unknown>).currentQuestion !== (gameState as Record<string, unknown>)?.currentQuestion) {
-            console.log('Question changed, resetting answer state:', ((data as Record<string, unknown>).currentQuestion as Record<string, unknown>).id);
-            setAnswerValue('');
-            setHasAnswered(false);
-            setLastResult(null);
-            setIsTimeUp(false);
-            setCurrentQuestion((data as Record<string, unknown>).currentQuestion as Record<string, unknown>);
+          // Reset answer state when question changes (compare by question ID)
+          if ((data as Record<string, unknown>).currentQuestion) {
+            const newQuestionId = ((data as Record<string, unknown>).currentQuestion as Record<string, unknown>).id;
+            const currentQuestionId = currentQuestion?.id;
+            
+            if (newQuestionId !== currentQuestionId) {
+              console.log('Question changed, resetting answer state:', newQuestionId);
+              setAnswerValue('');
+              setHasAnswered(false);
+              setLastResult(null);
+              setIsTimeUp(false);
+              setCurrentQuestion((data as Record<string, unknown>).currentQuestion as Record<string, unknown>);
+            }
           }
 
           // Get real-time timer info if there's an active question
@@ -171,7 +176,7 @@ export default function PlayPage() {
     pollGameState(); // Initial fetch
 
     return () => clearInterval(interval);
-  }, [eventId, gameState, hasAnswered, isTimeUp, playerId, handleTimeUpSubmit]);
+  }, [eventId, playerId, handleTimeUpSubmit]); // Remove gameState, hasAnswered, isTimeUp from dependencies
 
 
   const handleAnswerSubmit = async () => {
