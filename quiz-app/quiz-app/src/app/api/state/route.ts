@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockStorage, mockQuestions } from '@/lib/mockStorage';
+import { kvStorage } from '@/lib/kvStorage';
+import { mockQuestions } from '@/lib/mockStorage';
 
-// Node.js Runtimeを強制してメモリ共有を有効に
+// Node.js Runtimeを強制してKVとメモリ共有を有効に
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -17,9 +18,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Initialize game state for this event if it doesn't exist
-    if (!mockStorage.gameStates[eventId]) {
-      mockStorage.gameStates[eventId] = {
+    // Get or initialize game state for this event
+    let gameState = await kvStorage.getGameState(eventId);
+    if (!gameState) {
+      gameState = {
         status: 'lobby',
         currentQuestionIndex: 0,
         currentQuestion: null,
@@ -31,9 +33,8 @@ export async function GET(request: NextRequest) {
           totalAnswers: 0,
         },
       };
+      await kvStorage.setGameState(eventId, gameState);
     }
-
-    const gameState = mockStorage.gameStates[eventId] as Record<string, unknown>;
     
     // Ensure questions array is available
     if (!(gameState.questions as unknown[]) || (gameState.questions as unknown[]).length === 0) {
@@ -84,9 +85,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initialize game state if it doesn't exist
-    if (!mockStorage.gameStates[eventId]) {
-      mockStorage.gameStates[eventId] = {
+    // Get or initialize game state
+    let gameState = await kvStorage.getGameState(eventId);
+    if (!gameState) {
+      gameState = {
         status: 'lobby',
         currentQuestionIndex: 0,
         currentQuestion: null,
@@ -100,7 +102,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const gameState = mockStorage.gameStates[eventId] as Record<string, unknown>;
+    // gameStateは上で取得済み
 
     switch (action) {
       case 'startGame':
@@ -126,15 +128,10 @@ export async function POST(request: NextRequest) {
         gameState.currentQuestion = null;
         gameState.questionStartTime = null;
         // Clear all participants for complete reset
-        if (mockStorage.participants[eventId]) {
-          delete mockStorage.participants[eventId];
-        }
-        // Clear all answers
-        Object.keys(mockStorage.answers).forEach(key => {
-          if (key.startsWith(`${eventId}-`)) {
-            delete mockStorage.answers[key];
-          }
-        });
+        // Clear all participants
+        await kvStorage.setParticipants(eventId, []);
+        // Clear all answers (will be handled by individual answer endpoints)
+        console.log(`Reset: cleared all data for event ${eventId}`);
         console.log(`Game reset: cleared all participants and answers for event ${eventId}`);
         break;
 
@@ -146,6 +143,9 @@ export async function POST(request: NextRequest) {
     }
 
     gameState.serverTime = Date.now();
+    
+    // Save updated game state to KV
+    await kvStorage.setGameState(eventId, gameState);
 
     return NextResponse.json({
       success: true,
