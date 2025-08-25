@@ -1,4 +1,4 @@
-// Simple global storage for both local and Vercel environments
+// Enhanced global storage with multiple fallback strategies
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 interface GlobalMockStorage {
@@ -7,23 +7,57 @@ interface GlobalMockStorage {
   answers: { [key: string]: any[] };
 }
 
-// Vercel環境でも動作するglobalオブジェクトベースのストレージ
+// 複数のグローバルオブジェクトを試して最も永続的なものを使用
 function getGlobalStorage(): GlobalMockStorage {
-  const globalKey = '__QUIZ_APP_STORAGE__';
+  const globalKey = '__QUIZ_APP_STORAGE_V2__';
   
-  if (!(global as any)[globalKey]) {
-    console.log('🔄 STORAGE: Creating new instance');
-    (global as any)[globalKey] = {
-      gameStates: {},
-      participants: {},
-      answers: {},
-    };
+  // 複数のグローバルコンテキストを試す
+  const contexts = [
+    global,                    // Node.js global
+    globalThis,               // 標準グローバル
+    (global as any).process?.env  // process.envに保存も試す
+  ].filter(Boolean);
+  
+  // 既存のストレージを探す
+  for (const ctx of contexts) {
+    if (ctx && (ctx as any)[globalKey]) {
+      console.log('♻️ STORAGE: Reusing existing storage from', ctx === global ? 'global' : ctx === globalThis ? 'globalThis' : 'process');
+      return (ctx as any)[globalKey];
+    }
   }
-
-  return (global as any)[globalKey];
+  
+  // 新規作成
+  console.log('🔄 STORAGE: Creating new storage instance');
+  const newStorage = {
+    gameStates: {},
+    participants: {},
+    answers: {},
+    _createdAt: new Date().toISOString(),
+    _instanceId: Math.random().toString(36).substr(2, 9)
+  };
+  
+  // 全てのコンテキストに保存
+  contexts.forEach(ctx => {
+    if (ctx) {
+      (ctx as any)[globalKey] = newStorage;
+    }
+  });
+  
+  return newStorage;
 }
 
-export const mockStorage = getGlobalStorage();
+// プロキシで動的アクセスを保証
+export const mockStorage = new Proxy({} as GlobalMockStorage, {
+  get(target, prop: string) {
+    const storage = getGlobalStorage();
+    return storage[prop as keyof GlobalMockStorage];
+  },
+  set(target, prop: string, value) {
+    const storage = getGlobalStorage();
+    storage[prop as keyof GlobalMockStorage] = value;
+    return true;
+  }
+});
 
 // Battle Quiz questions - numerical answers (no time limits)
 export const mockQuestions = [

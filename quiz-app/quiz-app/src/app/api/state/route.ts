@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mockStorage, mockQuestions } from '@/lib/mockStorage';
 
+// Node.js Runtimeを強制してメモリ共有を有効に
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

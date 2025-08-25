@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mockStorage, correctAnswers } from '@/lib/mockStorage';
 
+// Node.js Runtimeを強制してメモリ共有を有効に
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Question start times storage (simulating database)
 const questionStartTimes: { [key: string]: number } = {};
 const questionExtensions: { [key: string]: number } = {};
