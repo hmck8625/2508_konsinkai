@@ -66,11 +66,11 @@ export default function HostPage() {
       }
     };
 
-    // Poll every 2 seconds
+    // Poll every 5 seconds for host page
     const interval = setInterval(() => {
       pollGameState();
       pollParticipants();
-    }, 2000);
+    }, 5000);
 
     // Initial fetch
     pollGameState();

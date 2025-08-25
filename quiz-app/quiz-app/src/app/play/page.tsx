@@ -172,7 +172,7 @@ export default function PlayPage() {
       }
     };
 
-    const interval = setInterval(pollGameState, 1000);
+    const interval = setInterval(pollGameState, 5000); // 5 seconds polling for play page
     pollGameState(); // Initial fetch
 
     return () => clearInterval(interval);

@@ -108,14 +108,24 @@ function ScreenDisplay() {
       }
     };
 
-    // Poll every 2 seconds for screen display
-    const interval = setInterval(pollData, 2000);
+    // Poll every 2.5 seconds for screen display
+    const interval = setInterval(pollData, 2500);
 
     // Initial fetch
     pollData();
 
     return () => clearInterval(interval);
   }, [eventId]);
+
+  // Helper function to check if statistics should be displayed
+  const shouldShowStats = () => {
+    return hasShownResults || showingResults || 
+           (answerStats && (
+             (answerStats as Record<string, unknown>)?.correctAnswer !== undefined ||
+             (answerStats as Record<string, unknown>)?.averageAnswer !== undefined ||
+             (answerStats as Record<string, unknown>)?.averageDamage !== undefined
+           ));
+  };
 
   // Game control functions
   const handleStartGame = async () => {
@@ -257,6 +267,12 @@ function ScreenDisplay() {
   const handleShowResults = async () => {
     if (!eventId || !gameState?.currentQuestion || showingResults || hasShownResults) return;
 
+    // 1. Set showingResults(true) to reveal statistics immediately
+    setShowingResults(true);
+    
+    // 2. Set timer to 0 immediately when results button is clicked
+    setAnswerStats(prev => prev ? { ...prev, timeRemaining: 0 } : null);
+
     // First, ensure all participants have answers (add 0 for unanswered)
     try {
       await fetch('/api/answer', {
@@ -279,13 +295,17 @@ function ScreenDisplay() {
       if (answerResponse.ok) {
         updatedAnswerStats = await answerResponse.json();
         console.log('Refetched answer stats for results:', updatedAnswerStats);
+        // 4. Ensure timer stays at 0 after data refetch
+        if (updatedAnswerStats) {
+          (updatedAnswerStats as Record<string, unknown>).timeRemaining = 0;
+        }
         setAnswerStats(updatedAnswerStats);
       }
     } catch (error) {
       console.error('Failed to refetch answer stats:', error);
     }
 
-    setShowingResults(true);
+    // setShowingResults(true); // Already set above for immediate statistics display
     setCurrentResultIndex(0);
 
     // Get participants who answered this question (should now include all participants)
@@ -508,12 +528,12 @@ function ScreenDisplay() {
                   <div className="text-center">
                     <div className="text-2xl opacity-75 mb-2">正解</div>
                     <div className="text-6xl font-bold text-green-400">
-                      {(hasShownResults || showingResults) ? 
+                      {shouldShowStats() ? 
                         String(((resultStats || answerStats) as Record<string, unknown>)?.correctAnswer || ((gameState as Record<string, unknown>).currentQuestion as Record<string, unknown>).correctAnswer || '?')
                         : '???'
                       }
                     </div>
-                    {!(hasShownResults || showingResults) && (
+                    {!shouldShowStats() && (
                       <div className="text-sm text-green-300 mt-2">結果発表後に表示</div>
                     )}
                   </div>
@@ -524,9 +544,9 @@ function ScreenDisplay() {
                   <div className="text-center">
                     <div className="text-2xl opacity-75 mb-2">平均回答</div>
                     <div className="text-6xl font-bold text-blue-400">
-                      {(hasShownResults || showingResults) ? String(((resultStats || answerStats) as Record<string, unknown>)?.averageAnswer || '-') : '???'}
+                      {shouldShowStats() ? String(((resultStats || answerStats) as Record<string, unknown>)?.averageAnswer || '-') : '???'}
                     </div>
-                    {!(hasShownResults || showingResults) && (
+                    {!shouldShowStats() && (
                       <div className="text-sm text-blue-300 mt-2">結果発表後に表示</div>
                     )}
                   </div>
@@ -537,9 +557,9 @@ function ScreenDisplay() {
                   <div className="text-center">
                     <div className="text-2xl opacity-75 mb-2">平均ダメージ</div>
                     <div className="text-6xl font-bold text-red-400">
-                      {(hasShownResults || showingResults) ? String(((resultStats || answerStats) as Record<string, unknown>)?.averageDamage || '-') : '???'}
+                      {shouldShowStats() ? String(((resultStats || answerStats) as Record<string, unknown>)?.averageDamage || '-') : '???'}
                     </div>
-                    {!(hasShownResults || showingResults) && (
+                    {!shouldShowStats() && (
                       <div className="text-sm text-red-300 mt-2">結果発表後に表示</div>
                     )}
                   </div>
