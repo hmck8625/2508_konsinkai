@@ -109,12 +109,14 @@ export async function POST(request: NextRequest) {
         gameState.status = 'active';
         gameState.currentQuestionIndex = 0;
         gameState.questionStartTime = Date.now();
+        console.log(`Game started at ${new Date(gameState.questionStartTime).toISOString()}`);
         break;
 
       case 'nextQuestion':
         if ((gameState.currentQuestionIndex as number) < (gameState.questions as unknown[]).length - 1) {
           gameState.currentQuestionIndex = (gameState.currentQuestionIndex as number) + 1;
           gameState.questionStartTime = Date.now();
+          console.log(`Next question started at ${new Date(gameState.questionStartTime).toISOString()}, question index: ${gameState.currentQuestionIndex}`);
         }
         break;
 
@@ -127,12 +129,29 @@ export async function POST(request: NextRequest) {
         gameState.currentQuestionIndex = 0;
         gameState.currentQuestion = null;
         gameState.questionStartTime = null;
+        gameState.leaderboard = [];
+        gameState.questionStats = {
+          totalAnswers: 0,
+        };
+        
         // Clear all participants for complete reset
-        // Clear all participants
         await kvStorage.setParticipants(eventId, []);
-        // Clear all answers (will be handled by individual answer endpoints)
-        console.log(`Reset: cleared all data for event ${eventId}`);
-        console.log(`Game reset: cleared all participants and answers for event ${eventId}`);
+        
+        // Clear all answer data for all questions
+        try {
+          const answerKeys = [
+            `${eventId}-q1`, `${eventId}-q2`, `${eventId}-q3`, 
+            `${eventId}-q4`, `${eventId}-q5`, `${eventId}-q6`
+          ];
+          for (const key of answerKeys) {
+            await kvStorage.setAnswers(key, []);
+          }
+          console.log(`Reset: cleared all answer data for event ${eventId}`);
+        } catch (error) {
+          console.error('Error clearing answer data:', error);
+        }
+        
+        console.log(`Game reset: cleared all data for event ${eventId}`);
         break;
 
       default:

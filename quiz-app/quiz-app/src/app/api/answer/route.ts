@@ -6,9 +6,7 @@ import { correctAnswers } from '@/lib/mockStorage';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Question start times storage (simulating database)
-const questionStartTimes: { [key: string]: number } = {};
-const questionExtensions: { [key: string]: number } = {};
+// Note: Timer data now stored in KV storage for proper persistence and reset handling
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,21 +28,23 @@ export async function POST(request: NextRequest) {
     const answerKey = `${eventId}-${questionId}`;
     const currentTime = Date.now();
 
-    // Check if question has started and get start time
-    const questionStartKey = `${eventId}-${questionId}-start`;
-    if (!questionStartTimes[questionStartKey]) {
-      // Set question start time to 5 seconds ago to allow some startup time
-      questionStartTimes[questionStartKey] = currentTime - 5000;
-      console.log(`Setting question start time for ${questionStartKey}: ${new Date(questionStartTimes[questionStartKey]).toISOString()}`);
+    // Check if question has started and get start time from game state
+    const gameStateResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/state?e=${eventId}`);
+    let questionStartTime = currentTime - 5000; // Default fallback
+    
+    if (gameStateResponse.ok) {
+      const gameState = await gameStateResponse.json();
+      if (gameState.questionStartTime) {
+        questionStartTime = gameState.questionStartTime;
+      }
     }
 
-    // Calculate time limit (60 seconds + extensions)
+    // Calculate time limit (60 seconds for now, extensions can be added later)
     const baseTimeLimit = 60 * 1000; // 60 seconds in milliseconds
-    const extensions = questionExtensions[questionStartKey] || 0;
-    const totalTimeLimit = baseTimeLimit + extensions;
+    const totalTimeLimit = baseTimeLimit;
     
     // Check if answer is within time limit
-    const elapsedTime = currentTime - questionStartTimes[questionStartKey];
+    const elapsedTime = currentTime - questionStartTime;
     if (elapsedTime > totalTimeLimit) {
       return NextResponse.json({
         success: false,
@@ -258,22 +258,27 @@ export async function GET(request: NextRequest) {
     }
 
     const answerKey = `${eventId}-${questionId}`;
-    const questionStartKey = `${eventId}-${questionId}-start`;
     const answers = await kvStorage.getAnswers(answerKey);
     const allParticipants = await kvStorage.getParticipants(eventId);
     const currentTime = Date.now();
 
-    // Calculate time remaining
+    // Calculate time remaining from game state
     let timeRemaining = 0;
     let questionStartTime = 0;
     
-    if (questionStartTimes[questionStartKey]) {
-      questionStartTime = questionStartTimes[questionStartKey];
-      const baseTimeLimit = 60 * 1000; // 60 seconds
-      const extensions = questionExtensions[questionStartKey] || 0;
-      const totalTimeLimit = baseTimeLimit + extensions;
-      const elapsedTime = currentTime - questionStartTime;
-      timeRemaining = Math.max(0, totalTimeLimit - elapsedTime);
+    try {
+      const gameStateResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/state?e=${eventId}`);
+      if (gameStateResponse.ok) {
+        const gameState = await gameStateResponse.json();
+        if (gameState.questionStartTime) {
+          questionStartTime = gameState.questionStartTime;
+          const baseTimeLimit = 60 * 1000; // 60 seconds
+          const elapsedTime = currentTime - questionStartTime;
+          timeRemaining = Math.max(0, baseTimeLimit - elapsedTime);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch game state for timer:', error);
     }
     const totalParticipants = allParticipants.length;
 
@@ -286,7 +291,7 @@ export async function GET(request: NextRequest) {
       averageDamage: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + (a.damage || 0), 0) / answers.length) : 0,
       timeRemaining,
       questionStartTime,
-      extensionCount: questionExtensions[questionStartKey] ? Math.floor(questionExtensions[questionStartKey] / 1000) : 0,
+      extensionCount: 0, // Extensions disabled for now, can be re-implemented later
       answers: answers.map(a => ({
         playerId: a.playerId,
         answerValue: a.answerValue,

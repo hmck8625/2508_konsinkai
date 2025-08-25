@@ -204,6 +204,18 @@ function ScreenDisplay() {
           body: JSON.stringify({ eventId, action: 'reset_game' })
         })
       ]);
+      
+      // Reset local state as well
+      setGameState(null);
+      setParticipants([]);
+      setAnswerStats(null);
+      setShowingResults(false);
+      setCurrentResultIndex(-1);
+      setAnimatingParticipant(null);
+      setHasShownResults(false);
+      setResultStats(null);
+      
+      console.log('Local screen state reset completed');
     } catch (error) {
       console.error('Failed to reset game:', error);
     } finally {
