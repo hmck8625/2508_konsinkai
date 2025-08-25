@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockStorage } from '@/lib/mockStorage';
+import { kvStorage } from '@/lib/kvStorage';
 
-// Node.js Runtimeを強制してメモリ共有を有効に
+// Node.js Runtimeを強制してKVとメモリ共有を有効に
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -22,24 +22,22 @@ export async function POST(request: NextRequest) {
     const playerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const eventId = body.eventCode;
 
-    // Initialize event participants array if it doesn't exist
-    if (!mockStorage.participants[eventId]) {
-      mockStorage.participants[eventId] = [];
-    }
+    // Get current participants from KV
+    const currentParticipants = await kvStorage.getParticipants(eventId);
 
     // Check if participant already exists with same deviceId AND nickname
-    const existingIndex = mockStorage.participants[eventId].findIndex(p => 
+    const existingIndex = currentParticipants.findIndex(p => 
       p.deviceId === body.deviceId && p.nickname === body.nickname.trim()
     );
     
     // If same device but different nickname, allow as new participant (different browser/session)
     let finalNickname = body.nickname.trim();
-    const nicknameExists = mockStorage.participants[eventId].some(p => p.nickname === finalNickname);
+    const nicknameExists = currentParticipants.some(p => p.nickname === finalNickname);
     
     // If nickname exists but not same device, modify nickname
     if (nicknameExists && existingIndex === -1) {
       let counter = 2;
-      while (mockStorage.participants[eventId].some(p => p.nickname === `${finalNickname}_${counter}`)) {
+      while (currentParticipants.some(p => p.nickname === `${finalNickname}_${counter}`)) {
         counter++;
       }
       finalNickname = `${finalNickname}_${counter}`;
@@ -58,18 +56,20 @@ export async function POST(request: NextRequest) {
 
     if (existingIndex >= 0) {
       // Update existing participant (same device, same nickname)
-      mockStorage.participants[eventId][existingIndex] = {
-        ...mockStorage.participants[eventId][existingIndex],
+      currentParticipants[existingIndex] = {
+        ...currentParticipants[existingIndex],
         playerId, // Generate new playerId for rejoining
         joinedAt: new Date().toISOString(),
         status: 'active'
       };
     } else {
       // Add new participant
-      mockStorage.participants[eventId].push(participantData);
+      currentParticipants.push(participantData);
     }
 
-    console.log(`💾 JOIN ${eventId}:`, participantData.playerId, 'Total:', mockStorage.participants[eventId].length);
+    // Save to KV
+    await kvStorage.setParticipants(eventId, currentParticipants);
+    console.log(`💾 JOIN ${eventId}:`, participantData.playerId, 'Total:', currentParticipants.length);
 
     const mockResponse = {
       success: true,

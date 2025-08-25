@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockStorage } from '@/lib/mockStorage';
+import { kvStorage } from '@/lib/kvStorage';
 
-// Node.js Runtimeを強制してメモリ共有を有効に
+// Node.js Runtimeを強制してKVとメモリ共有を有効に
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get participants for this event
-    const participants = mockStorage.participants[eventId] || [];
+    // Get participants for this event from KV
+    const participants = await kvStorage.getParticipants(eventId);
     
     console.log(`📊 GET participants for event ${eventId}:`, participants.length, 'participants');
 
@@ -48,13 +48,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initialize event participants array if it doesn't exist
-    if (!mockStorage.participants[eventId]) {
-      mockStorage.participants[eventId] = [];
-    }
+    // Get current participants from KV
+    const currentParticipants = await kvStorage.getParticipants(eventId);
 
     // Check if participant already exists
-    const existingIndex = mockStorage.participants[eventId].findIndex(p => p.playerId === playerId);
+    const existingIndex = currentParticipants.findIndex(p => p.playerId === playerId);
     
     const participantData = {
       playerId,
@@ -69,12 +67,14 @@ export async function POST(request: NextRequest) {
 
     if (existingIndex >= 0) {
       // Update existing participant
-      mockStorage.participants[eventId][existingIndex] = participantData;
+      currentParticipants[existingIndex] = participantData;
     } else {
       // Add new participant
-      mockStorage.participants[eventId].push(participantData);
+      currentParticipants.push(participantData);
     }
 
+    // Save to KV
+    await kvStorage.setParticipants(eventId, currentParticipants);
     console.log(`💾 SET participant for event ${eventId}:`, participantData.playerId);
 
     return NextResponse.json({
@@ -104,27 +104,28 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Find participant and update life
-    if (mockStorage.participants[eventId]) {
-      const participantIndex = mockStorage.participants[eventId].findIndex(p => p.playerId === playerId);
+    // Get current participants and find the one to update
+    const currentParticipants = await kvStorage.getParticipants(eventId);
+    const participantIndex = currentParticipants.findIndex(p => p.playerId === playerId);
+    
+    if (participantIndex >= 0) {
+      const participant = currentParticipants[participantIndex];
+      participant.lastDamage = damage;
+      participant.totalDamage = (participant.totalDamage || 0) + damage;
+      participant.life = Math.max(0, (participant.life || 100) - damage);
       
-      if (participantIndex >= 0) {
-        const participant = mockStorage.participants[eventId][participantIndex];
-        participant.lastDamage = damage;
-        participant.totalDamage = (participant.totalDamage || 0) + damage;
-        participant.life = Math.max(0, (participant.life || 100) - damage);
-        
-        if (participant.life <= 0) {
-          participant.status = 'eliminated';
-        }
-
-        console.log(`🔄 DAMAGE ${playerId}:`, damage, 'life:', participant.life);
-
-        return NextResponse.json({
-          success: true,
-          participant
-        });
+      if (participant.life <= 0) {
+        participant.status = 'eliminated';
       }
+
+      // Save updated participants to KV
+      await kvStorage.setParticipants(eventId, currentParticipants);
+      console.log(`🔄 DAMAGE ${playerId}:`, damage, 'life:', participant.life);
+
+      return NextResponse.json({
+        success: true,
+        participant
+      });
     }
 
     return NextResponse.json(
