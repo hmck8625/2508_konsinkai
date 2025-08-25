@@ -79,6 +79,10 @@ function ScreenDisplay() {
             const answerResponse = await fetch(`/api/answer?e=${eventId}&q=${currentQuestionId}`);
             if (answerResponse.ok) {
               const answerData = await answerResponse.json();
+              // If results are being shown, keep timer at 0
+              if (showingResults || hasShownResults) {
+                answerData.timeRemaining = 0;
+              }
               setAnswerStats(answerData);
             } else {
               // Set defaults only if we don't have any stats yet
@@ -119,12 +123,8 @@ function ScreenDisplay() {
 
   // Helper function to check if statistics should be displayed
   const shouldShowStats = () => {
-    return hasShownResults || showingResults || 
-           (answerStats && (
-             (answerStats as Record<string, unknown>)?.correctAnswer !== undefined ||
-             (answerStats as Record<string, unknown>)?.averageAnswer !== undefined ||
-             (answerStats as Record<string, unknown>)?.averageDamage !== undefined
-           ));
+    // Only show stats when results have been explicitly shown
+    return hasShownResults || showingResults;
   };
 
   // Game control functions
