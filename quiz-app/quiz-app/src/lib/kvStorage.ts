@@ -20,19 +20,31 @@ class KVStorage {
       answers: {},
     };
     
+    // 詳細なデバッグ情報
     console.log(`🗄️ STORAGE: ${this.isKVAvailable ? 'Vercel KV (Redis)' : 'Local fallback'} mode`);
+    console.log(`🔍 DEBUG: KV_REST_API_URL exists: ${!!process.env.KV_REST_API_URL}`);
+    console.log(`🔍 DEBUG: KV_REST_API_TOKEN exists: ${!!process.env.KV_REST_API_TOKEN}`);
+    if (process.env.KV_REST_API_URL) {
+      console.log(`🔍 DEBUG: KV_REST_API_URL: ${process.env.KV_REST_API_URL.substring(0, 30)}...`);
+    }
+    if (!this.isKVAvailable) {
+      console.log(`⚠️  WARNING: KV not available, using local cache only`);
+    }
   }
 
   async getParticipants(eventId: string): Promise<any[]> {
     if (this.isKVAvailable) {
       try {
         const key = `participants:${eventId}`;
+        console.log(`🔍 DEBUG: Attempting KV GET for key: ${key}`);
         const data = await kv.get<any[]>(key);
         const participants = data || [];
         console.log(`🔵 KV GET ${key}: ${participants.length} participants`);
+        console.log(`🔵 KV GET data:`, JSON.stringify(participants, null, 2));
         return participants;
       } catch (error) {
-        console.error('KV GET error:', error);
+        console.error(`❌ KV GET ERROR for ${eventId}:`, error);
+        console.log(`🔄 FALLBACK: Using local cache for ${eventId}`);
         return this.localCache.participants[eventId] || [];
       }
     }
@@ -45,12 +57,14 @@ class KVStorage {
     if (this.isKVAvailable) {
       try {
         const key = `participants:${eventId}`;
+        console.log(`🔍 DEBUG: Attempting KV SET for key: ${key}`);
         await kv.set(key, participants, {
           ex: 86400 // 24時間のTTL
         });
-        console.log(`🔴 KV SET ${key}: ${participants.length} participants`);
+        console.log(`🔴 KV SET ${key}: ${participants.length} participants SUCCESSFUL`);
       } catch (error) {
-        console.error('KV SET error:', error);
+        console.error(`❌ KV SET ERROR for ${eventId}:`, error);
+        console.log(`🔄 FALLBACK: Data saved to local cache only`);
       }
     }
   }
