@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { kv } from '@vercel/kv';
+import { createClient } from 'redis';
 
 interface StorageData {
   gameStates: { [eventId: string]: any };
@@ -10,23 +11,39 @@ interface StorageData {
 class KVStorage {
   private isKVAvailable: boolean;
   private localCache: StorageData;
+  private useRedis: boolean;
+  private redisClient: any;
   
   constructor() {
-    // REDIS_URLがある場合、環境変数を設定してKVクライアントが利用できるようにする
-    if (process.env.REDIS_URL && !process.env.KV_REST_API_URL) {
-      // REDIS_URLをパースしてKV環境変数を設定
-      const redisUrl = new URL(process.env.REDIS_URL);
-      process.env.KV_REST_API_URL = process.env.REDIS_URL;
-      // パスワードがある場合はトークンとして使用
-      if (redisUrl.password) {
-        process.env.KV_REST_API_TOKEN = redisUrl.password;
-      }
-    }
+    this.useRedis = false;
     
-    // KV環境変数の存在確認 (従来形式とMarketplace形式の両方をサポート)
-    const hasKVUrl = !!(process.env.KV_REST_API_URL);
-    const hasKVToken = !!(process.env.KV_REST_API_TOKEN);
-    this.isKVAvailable = hasKVUrl && hasKVToken;
+    // REDIS_URLがある場合、Redis Cloudクライアントを使用
+    if (process.env.REDIS_URL && !process.env.KV_REST_API_URL) {
+      console.log(`🔧 DEBUG: Using Redis Cloud client with REDIS_URL`);
+      this.useRedis = true;
+      this.redisClient = createClient({
+        url: process.env.REDIS_URL
+      });
+      
+      // Redis接続エラーハンドリング
+      this.redisClient.on('error', (err: any) => {
+        console.error('Redis Client Error:', err);
+        this.useRedis = false; // エラー時はローカルフォールバック
+      });
+      
+      // Redis接続を確立
+      this.redisClient.connect().catch((err: any) => {
+        console.error('Redis Connection Error:', err);
+        this.useRedis = false;
+      });
+      
+      this.isKVAvailable = true; // Redisが利用可能
+    } else {
+      // KV環境変数の存在確認 (従来形式とMarketplace形式の両方をサポート)
+      const hasKVUrl = !!(process.env.KV_REST_API_URL);
+      const hasKVToken = !!(process.env.KV_REST_API_TOKEN);
+      this.isKVAvailable = hasKVUrl && hasKVToken;
+    }
     
     this.localCache = {
       gameStates: {},
@@ -55,14 +72,21 @@ class KVStorage {
     if (this.isKVAvailable) {
       try {
         const key = `participants:${eventId}`;
-        console.log(`🔍 DEBUG: Attempting KV GET for key: ${key}`);
-        const data = await kv.get<any[]>(key);
+        console.log(`🔍 DEBUG: Attempting ${this.useRedis ? 'Redis' : 'KV'} GET for key: ${key}`);
+        
+        let data;
+        if (this.useRedis && this.redisClient.isOpen) {
+          const rawData = await this.redisClient.get(key);
+          data = rawData ? JSON.parse(rawData) : null;
+        } else {
+          data = await kv.get<any[]>(key);
+        }
+        
         const participants = data || [];
-        console.log(`🔵 KV GET ${key}: ${participants.length} participants`);
-        console.log(`🔵 KV GET data:`, JSON.stringify(participants, null, 2));
+        console.log(`🔵 ${this.useRedis ? 'Redis' : 'KV'} GET ${key}: ${participants.length} participants`);
         return participants;
       } catch (error) {
-        console.error(`❌ KV GET ERROR for ${eventId}:`, error);
+        console.error(`❌ ${this.useRedis ? 'Redis' : 'KV'} GET ERROR for ${eventId}:`, error);
         console.log(`🔄 FALLBACK: Using local cache for ${eventId}`);
         return this.localCache.participants[eventId] || [];
       }
@@ -76,13 +100,19 @@ class KVStorage {
     if (this.isKVAvailable) {
       try {
         const key = `participants:${eventId}`;
-        console.log(`🔍 DEBUG: Attempting KV SET for key: ${key}`);
-        await kv.set(key, participants, {
-          ex: 86400 // 24時間のTTL
-        });
-        console.log(`🔴 KV SET ${key}: ${participants.length} participants SUCCESSFUL`);
+        console.log(`🔍 DEBUG: Attempting ${this.useRedis ? 'Redis' : 'KV'} SET for key: ${key}`);
+        
+        if (this.useRedis && this.redisClient.isOpen) {
+          await this.redisClient.setEx(key, 86400, JSON.stringify(participants)); // 24時間のTTL
+        } else {
+          await kv.set(key, participants, {
+            ex: 86400 // 24時間のTTL
+          });
+        }
+        
+        console.log(`🔴 ${this.useRedis ? 'Redis' : 'KV'} SET ${key}: ${participants.length} participants SUCCESSFUL`);
       } catch (error) {
-        console.error(`❌ KV SET ERROR for ${eventId}:`, error);
+        console.error(`❌ ${this.useRedis ? 'Redis' : 'KV'} SET ERROR for ${eventId}:`, error);
         console.log(`🔄 FALLBACK: Data saved to local cache only`);
       }
     }
@@ -92,11 +122,17 @@ class KVStorage {
     if (this.isKVAvailable) {
       try {
         const key = `gameState:${eventId}`;
-        const state = await kv.get<any>(key);
-        console.log(`🔵 KV GET ${key}: ${state?.status || 'null'}`);
+        let state;
+        if (this.useRedis && this.redisClient.isOpen) {
+          const rawData = await this.redisClient.get(key);
+          state = rawData ? JSON.parse(rawData) : null;
+        } else {
+          state = await kv.get<any>(key);
+        }
+        console.log(`🔵 ${this.useRedis ? 'Redis' : 'KV'} GET ${key}: ${state?.status || 'null'}`);
         return state;
       } catch (error) {
-        console.error('KV GET error:', error);
+        console.error(`${this.useRedis ? 'Redis' : 'KV'} GET error:`, error);
         return this.localCache.gameStates[eventId] || null;
       }
     }
@@ -109,12 +145,16 @@ class KVStorage {
     if (this.isKVAvailable) {
       try {
         const key = `gameState:${eventId}`;
-        await kv.set(key, state, {
-          ex: 86400 // 24時間のTTL
-        });
-        console.log(`🔴 KV SET ${key}: ${state?.status || 'null'}`);
+        if (this.useRedis && this.redisClient.isOpen) {
+          await this.redisClient.setEx(key, 86400, JSON.stringify(state));
+        } else {
+          await kv.set(key, state, {
+            ex: 86400 // 24時間のTTL
+          });
+        }
+        console.log(`🔴 ${this.useRedis ? 'Redis' : 'KV'} SET ${key}: ${state?.status || 'null'}`);
       } catch (error) {
-        console.error('KV SET error:', error);
+        console.error(`${this.useRedis ? 'Redis' : 'KV'} SET error:`, error);
       }
     }
   }
@@ -123,10 +163,16 @@ class KVStorage {
     if (this.isKVAvailable) {
       try {
         const kvKey = `answers:${key}`;
-        const data = await kv.get<any[]>(kvKey);
+        let data;
+        if (this.useRedis && this.redisClient.isOpen) {
+          const rawData = await this.redisClient.get(kvKey);
+          data = rawData ? JSON.parse(rawData) : null;
+        } else {
+          data = await kv.get<any[]>(kvKey);
+        }
         return data || [];
       } catch (error) {
-        console.error('KV GET error:', error);
+        console.error(`${this.useRedis ? 'Redis' : 'KV'} GET error:`, error);
         return this.localCache.answers[key] || [];
       }
     }
@@ -139,11 +185,15 @@ class KVStorage {
     if (this.isKVAvailable) {
       try {
         const kvKey = `answers:${key}`;
-        await kv.set(kvKey, answers, {
-          ex: 86400 // 24時間のTTL
-        });
+        if (this.useRedis && this.redisClient.isOpen) {
+          await this.redisClient.setEx(kvKey, 86400, JSON.stringify(answers));
+        } else {
+          await kv.set(kvKey, answers, {
+            ex: 86400 // 24時間のTTL
+          });
+        }
       } catch (error) {
-        console.error('KV SET error:', error);
+        console.error(`${this.useRedis ? 'Redis' : 'KV'} SET error:`, error);
       }
     }
   }
@@ -152,11 +202,16 @@ class KVStorage {
   async debugListKeys(): Promise<string[]> {
     if (this.isKVAvailable) {
       try {
-        const keys = await kv.keys('*');
-        console.log('🔍 KV Keys:', keys);
+        let keys;
+        if (this.useRedis && this.redisClient.isOpen) {
+          keys = await this.redisClient.keys('*');
+        } else {
+          keys = await kv.keys('*');
+        }
+        console.log(`🔍 ${this.useRedis ? 'Redis' : 'KV'} Keys:`, keys);
         return keys;
       } catch (error) {
-        console.error('KV KEYS error:', error);
+        console.error(`${this.useRedis ? 'Redis' : 'KV'} KEYS error:`, error);
       }
     }
     return [];
