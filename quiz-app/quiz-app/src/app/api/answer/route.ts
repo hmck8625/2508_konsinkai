@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockStorage, correctAnswers } from '@/lib/mockStorage';
+import { kvStorage } from '@/lib/kvStorage';
+import { correctAnswers } from '@/lib/mockStorage';
 
 // Node.js Runtimeを強制してメモリ共有を有効に
 export const runtime = 'nodejs';
@@ -53,13 +54,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Initialize answers array for this question if it doesn't exist
-    if (!mockStorage.answers[answerKey]) {
-      mockStorage.answers[answerKey] = [];
-    }
-
+    // Get existing answers for this question
+    const existingAnswers = await kvStorage.getAnswers(answerKey);
+    
     // Check if player already answered
-    const existingAnswer = mockStorage.answers[answerKey].find((a) => (a as Record<string, unknown>).playerId === playerId);
+    const existingAnswer = existingAnswers.find(a => a.playerId === playerId);
     if (existingAnswer) {
       return NextResponse.json({
         success: false,
@@ -69,15 +68,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if player is eliminated
-    if (mockStorage.participants[eventId]) {
-      const participant = mockStorage.participants[eventId].find(p => (p as Record<string, unknown>).playerId === playerId);
-      if (participant && (participant as Record<string, unknown>).status === 'eliminated') {
-        return NextResponse.json({
-          success: false,
-          accepted: false,
-          error: 'ELIMINATEDユーザーは回答できません'
-        });
-      }
+    const participants = await kvStorage.getParticipants(eventId);
+    const participant = participants.find(p => p.playerId === playerId);
+    if (participant && participant.status === 'eliminated') {
+      return NextResponse.json({
+        success: false,
+        accepted: false,
+        error: 'ELIMINATEDユーザーは回答できません'
+      });
     }
 
     // Get question range (default 0-100 if not specified)
@@ -110,19 +108,19 @@ export async function POST(request: NextRequest) {
       isLastAnswerer: false // Will be determined later
     };
 
-    // Add new answer
-    mockStorage.answers[answerKey].push(answerData);
+    // Add new answer to existing answers and save
+    const updatedAnswers = [...existingAnswers, answerData];
+    await kvStorage.setAnswers(answerKey, updatedAnswers);
 
     console.log(`Answer stored for ${answerKey}:`, answerData);
-    console.log(`Total answers for ${answerKey}:`, mockStorage.answers[answerKey].length);
+    console.log(`Total answers for ${answerKey}:`, updatedAnswers.length);
 
     // Check if all participants have answered to apply last answerer penalty
-    const allParticipants = mockStorage.participants[eventId] || [];
-    const allAnswered = mockStorage.answers[answerKey].length >= allParticipants.length;
+    const allAnswered = updatedAnswers.length >= participants.length;
     
     if (allAnswered) {
       // Apply last answerer penalty immediately when all have answered
-      applyLastAnswererPenalty(eventId, questionId);
+      await applyLastAnswererPenalty(eventId, questionId);
     }
 
     const response = {
@@ -152,24 +150,24 @@ export async function PUT(request: NextRequest) {
     
     const answerKey = `${eventId}-${questionId}`;
     
-    if (!mockStorage.answers[answerKey]) {
-      mockStorage.answers[answerKey] = [];
-    }
-
+    // Get existing answers and participants
+    const existingAnswers = await kvStorage.getAnswers(answerKey);
+    const allParticipants = await kvStorage.getParticipants(eventId);
+    
     // Get all participants who haven't answered
-    const answeredPlayers = mockStorage.answers[answerKey].map(a => (a as Record<string, unknown>).playerId);
-    const allParticipants = mockStorage.participants[eventId] || [];
-    const unansweredPlayers = allParticipants.filter(p => !answeredPlayers.includes((p as Record<string, unknown>).playerId));
+    const answeredPlayers = existingAnswers.map(a => a.playerId);
+    const unansweredPlayers = allParticipants.filter(p => !answeredPlayers.includes(p.playerId));
 
     // Add timeout answers (value: 0) for unanswered players
     const correctAnswer = correctAnswers[questionId] || 0;
     const currentTime = Date.now();
     
+    const timeoutAnswers = [];
     for (const player of unansweredPlayers) {
       const damage = Math.abs(0 - correctAnswer); // Damage from answering 0
       
-      mockStorage.answers[answerKey].push({
-        playerId: (player as Record<string, unknown>).playerId,
+      timeoutAnswers.push({
+        playerId: player.playerId,
         answerValue: 0,
         answerTime: 60000, // Max time
         correctAnswer,
@@ -180,9 +178,13 @@ export async function PUT(request: NextRequest) {
         isLastAnswerer: false
       });
     }
+    
+    // Save all answers (existing + timeout answers)
+    const allAnswers = [...existingAnswers, ...timeoutAnswers];
+    await kvStorage.setAnswers(answerKey, allAnswers);
 
     // Apply last answerer penalty for all answers (including timeouts)
-    applyLastAnswererPenalty(eventId, questionId);
+    await applyLastAnswererPenalty(eventId, questionId);
 
     return NextResponse.json({ success: true });
 
@@ -199,19 +201,19 @@ export async function PUT(request: NextRequest) {
 // TODO: Move to separate utility file if needed
 
 // Function to apply last answerer penalty
-function applyLastAnswererPenalty(eventId: string, questionId: string) {
+async function applyLastAnswererPenalty(eventId: string, questionId: string) {
   const answerKey = `${eventId}-${questionId}`;
-  const answers = (mockStorage.answers[answerKey] || []) as Record<string, unknown>[];
+  const answers = await kvStorage.getAnswers(answerKey);
   
   if (answers.length === 0) return;
   
   // Get participants to check elimination status
-  const participants = mockStorage.participants[eventId] || [];
+  const participants = await kvStorage.getParticipants(eventId);
   
   // Filter out answers from eliminated players before determining last answerer
   const activeAnswers = answers.filter(answer => {
-    const participant = participants.find(p => (p as Record<string, unknown>).playerId === answer.playerId);
-    return participant && (participant as Record<string, unknown>).status !== 'eliminated';
+    const participant = participants.find(p => p.playerId === answer.playerId);
+    return participant && participant.status !== 'eliminated';
   });
   
   if (activeAnswers.length === 0) return;
@@ -221,16 +223,22 @@ function applyLastAnswererPenalty(eventId: string, questionId: string) {
   const latestTime = sortedActiveAnswers[0].submittedAt;
   
   // Mark all active answers with latest timestamp as last answerer and apply double damage
+  let updatedAnswers = false;
   answers.forEach(answer => {
-    const participant = participants.find(p => (p as Record<string, unknown>).playerId === answer.playerId);
-    const isActive = participant && (participant as Record<string, unknown>).status !== 'eliminated';
+    const participant = participants.find(p => p.playerId === answer.playerId);
+    const isActive = participant && participant.status !== 'eliminated';
     
     if (isActive && answer.submittedAt === latestTime && !answer.isTimeout) {
       answer.isLastAnswerer = true;
-      answer.damage = (answer.damage as number) * 2; // Double damage for last answerers
+      answer.damage = answer.damage * 2; // Double damage for last answerers
       console.log(`Applied last answerer penalty to active player ${answer.playerId}: ${answer.damage} damage`);
+      updatedAnswers = true;
     }
   });
+  
+  if (updatedAnswers) {
+    await kvStorage.setAnswers(answerKey, answers);
+  }
   
   console.log(`Applied last answerer penalty for ${answerKey} (excluded eliminated players)`);
 }
@@ -251,7 +259,8 @@ export async function GET(request: NextRequest) {
 
     const answerKey = `${eventId}-${questionId}`;
     const questionStartKey = `${eventId}-${questionId}-start`;
-    const answers = (mockStorage.answers[answerKey] || []) as Record<string, unknown>[];
+    const answers = await kvStorage.getAnswers(answerKey);
+    const allParticipants = await kvStorage.getParticipants(eventId);
     const currentTime = Date.now();
 
     // Calculate time remaining
@@ -266,9 +275,6 @@ export async function GET(request: NextRequest) {
       const elapsedTime = currentTime - questionStartTime;
       timeRemaining = Math.max(0, totalTimeLimit - elapsedTime);
     }
-
-    // Get total participants count
-    const allParticipants = mockStorage.participants[eventId] || [];
     const totalParticipants = allParticipants.length;
 
     // Calculate battle quiz statistics
@@ -276,8 +282,8 @@ export async function GET(request: NextRequest) {
       totalAnswers: answers.length,
       totalParticipants,
       correctAnswer: correctAnswers[questionId] || 0,
-      averageAnswer: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + (Number(a.answerValue) || 0), 0) / answers.length) : 0,
-      averageDamage: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + (Number(a.damage) || 0), 0) / answers.length) : 0,
+      averageAnswer: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + (a.answerValue || 0), 0) / answers.length) : 0,
+      averageDamage: answers.length > 0 ? Math.round(answers.reduce((sum, a) => sum + (a.damage || 0), 0) / answers.length) : 0,
       timeRemaining,
       questionStartTime,
       extensionCount: questionExtensions[questionStartKey] ? Math.floor(questionExtensions[questionStartKey] / 1000) : 0,

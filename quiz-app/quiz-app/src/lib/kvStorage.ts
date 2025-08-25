@@ -12,8 +12,11 @@ class KVStorage {
   private localCache: StorageData;
   
   constructor() {
-    // KV環境変数の存在確認
-    this.isKVAvailable = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+    // KV環境変数の存在確認 (従来形式とMarketplace形式の両方をサポート)
+    const hasKVUrl = !!(process.env.KV_REST_API_URL || process.env.REDIS_URL);
+    const hasKVToken = !!(process.env.KV_REST_API_TOKEN || process.env.REDIS_URL); // REDIS_URLはトークンも含む
+    this.isKVAvailable = hasKVUrl && hasKVToken;
+    
     this.localCache = {
       gameStates: {},
       participants: {},
@@ -24,9 +27,14 @@ class KVStorage {
     console.log(`🗄️ STORAGE: ${this.isKVAvailable ? 'Vercel KV (Redis)' : 'Local fallback'} mode`);
     console.log(`🔍 DEBUG: KV_REST_API_URL exists: ${!!process.env.KV_REST_API_URL}`);
     console.log(`🔍 DEBUG: KV_REST_API_TOKEN exists: ${!!process.env.KV_REST_API_TOKEN}`);
+    console.log(`🔍 DEBUG: REDIS_URL exists: ${!!process.env.REDIS_URL}`);
+    
     if (process.env.KV_REST_API_URL) {
-      console.log(`🔍 DEBUG: KV_REST_API_URL: ${process.env.KV_REST_API_URL.substring(0, 30)}...`);
+      console.log(`🔍 DEBUG: Using KV_REST_API_URL: ${process.env.KV_REST_API_URL.substring(0, 30)}...`);
+    } else if (process.env.REDIS_URL) {
+      console.log(`🔍 DEBUG: Using REDIS_URL: ${process.env.REDIS_URL.substring(0, 30)}...`);
     }
+    
     if (!this.isKVAvailable) {
       console.log(`⚠️  WARNING: KV not available, using local cache only`);
     }
