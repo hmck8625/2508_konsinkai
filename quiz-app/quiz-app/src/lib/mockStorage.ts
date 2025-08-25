@@ -1,45 +1,29 @@
-// Mock storage shared between API routes using globalThis
-// In production, this would be replaced with a database
-
+// Simple global storage for both local and Vercel environments
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
 interface GlobalMockStorage {
   gameStates: { [eventId: string]: any };
   participants: { [eventId: string]: any[] };
   answers: { [key: string]: any[] };
 }
 
-// より安定したストレージアクセスパターン
+// Vercel環境でも動作するglobalオブジェクトベースのストレージ
 function getGlobalStorage(): GlobalMockStorage {
-  const globalForMockStorage = globalThis as unknown as {
-    mockStorage: GlobalMockStorage | undefined;
-  };
-
-  if (!globalForMockStorage.mockStorage) {
-    console.log('🔄 STORAGE DEBUG: Creating new mockStorage instance');
-    globalForMockStorage.mockStorage = {
+  const globalKey = '__QUIZ_APP_STORAGE__';
+  
+  if (!(global as any)[globalKey]) {
+    console.log('🔄 STORAGE: Creating new instance');
+    (global as any)[globalKey] = {
       gameStates: {},
       participants: {},
       answers: {},
     };
-  } else {
-    console.log('🔗 STORAGE DEBUG: Reusing existing mockStorage');
   }
 
-  return globalForMockStorage.mockStorage;
+  return (global as any)[globalKey];
 }
 
-// プロキシを使用してアクセス時に常に最新のストレージを取得
-export const mockStorage = new Proxy({} as GlobalMockStorage, {
-  get(target, prop: keyof GlobalMockStorage) {
-    const storage = getGlobalStorage();
-    return storage[prop];
-  },
-  set(target, prop: keyof GlobalMockStorage, value) {
-    const storage = getGlobalStorage();
-    storage[prop] = value;
-    return true;
-  }
-});
+export const mockStorage = getGlobalStorage();
 
 // Battle Quiz questions - numerical answers (no time limits)
 export const mockQuestions = [

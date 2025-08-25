@@ -13,17 +13,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get mock participants for this event
+    // Get participants for this event
     const participants = mockStorage.participants[eventId] || [];
     
-    // ストレージの状態をデバッグ
-    console.log(`🔍 STORAGE DEBUG: mockStorage.participants keys:`, Object.keys(mockStorage.participants));
-    console.log(`🔍 STORAGE DEBUG: eventId '${eventId}' exists:`, eventId in mockStorage.participants);
-    console.log(`📊 DEBUG Participants for event ${eventId}:`, participants.length, 'participants');
-    
-    if (participants.length === 0) {
-      console.log(`⚠️  WARNING: No participants found for event ${eventId} - storage may have been reset`);
-    }
+    console.log(`📊 GET participants for event ${eventId}:`, participants.length, 'participants');
 
     return NextResponse.json({
       participants,
@@ -78,7 +71,7 @@ export async function POST(request: NextRequest) {
       mockStorage.participants[eventId].push(participantData);
     }
 
-    console.log(`Added/Updated participant for event ${eventId}:`, participantData);
+    console.log(`💾 SET participant for event ${eventId}:`, participantData.playerId);
 
     return NextResponse.json({
       success: true,
@@ -121,7 +114,7 @@ export async function PUT(request: NextRequest) {
           participant.status = 'eliminated';
         }
 
-        console.log(`Updated participant ${playerId} life:`, participant);
+        console.log(`🔄 DAMAGE ${playerId}:`, damage, 'life:', participant.life);
 
         return NextResponse.json({
           success: true,
