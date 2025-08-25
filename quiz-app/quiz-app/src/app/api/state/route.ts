@@ -124,6 +124,13 @@ export async function POST(request: NextRequest) {
         gameState.status = 'ended';
         break;
 
+      case 'extendTime':
+        if (body.extensionMs && gameState.questionStartTime) {
+          gameState.questionStartTime = gameState.questionStartTime + body.extensionMs;
+          console.log(`Time extended by ${body.extensionMs}ms, new start time: ${new Date(gameState.questionStartTime).toISOString()}`);
+        }
+        break;
+
       case 'resetGame':
         gameState.status = 'lobby';
         gameState.currentQuestionIndex = 0;

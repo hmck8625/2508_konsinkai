@@ -38,12 +38,16 @@ function ScreenDisplay() {
           stateData = await stateResponse.json();
           console.log(`📺 SCREEN DEBUG Game state for ${eventId}:`, stateData.status, stateData.currentQuestion ? `question: ${stateData.currentQuestion.id}` : 'no question');
           
-          // Check if question changed - only reset results state if we're moving to a new question
+          // Check if question changed - reset results state for any question change
           const oldQuestionId = (gameState as any)?.currentQuestion?.id;
           const newQuestionId = (stateData as any)?.currentQuestion?.id;
           
-          // Only reset state when we have a clear question change (both old and new exist and are different)
-          if (oldQuestionId && newQuestionId && oldQuestionId !== newQuestionId) {
+          // Reset state when:
+          // 1. Moving from one question to another (both exist and different)
+          // 2. Moving from no question to a question (oldQuestionId is null/undefined)
+          // 3. Question ID actually changed
+          if (oldQuestionId !== newQuestionId) {
+            console.log(`🔄 Question changed: ${oldQuestionId} -> ${newQuestionId}, resetting result state`);
             setHasShownResults(false);
             setShowingResults(false);
             setCurrentResultIndex(-1);

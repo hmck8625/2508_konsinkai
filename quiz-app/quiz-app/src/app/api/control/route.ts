@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { kvStorage } from '@/lib/kvStorage';
 // Timer functions moved inline to avoid Next.js export conflicts
 
 // Node.js Runtimeを強制してメモリ共有を有効に
@@ -33,8 +34,18 @@ export async function POST(request: NextRequest) {
       // const extensionMs = extensionSeconds * 1000;
 
       try {
-        // Call the extension function from answer API
-        // extendQuestionTime(eventId, questionId, extensionMs); // Temporarily disabled
+        // Get current game state and extend the question start time
+        const gameState = await kvStorage.getGameState(eventId);
+        if (gameState?.questionStartTime) {
+          // Extend the question by moving the start time forward
+          const extensionMs = extensionSeconds * 1000;
+          gameState.questionStartTime = gameState.questionStartTime + extensionMs;
+          
+          // Save the updated game state
+          await kvStorage.setGameState(eventId, gameState);
+          
+          console.log(`Time extended by ${extensionSeconds}s for question ${questionId}`);
+        }
         
         return NextResponse.json({
           success: true,
@@ -90,20 +101,7 @@ export async function POST(request: NextRequest) {
       case 'timeout_question':
         // Handle automatic timeout for unanswered players
         if (questionId) {
-          try {
-            // Call the timeout handling from answer API
-            const timeoutResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/answer`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ eventId, questionId })
-            });
-            
-            if (timeoutResponse.ok) {
-              mockResponse.message = '回答時間が終了し、未回答者は自動的に0として記録されました';
-            }
-          } catch (error) {
-            console.error('Timeout handling error:', error);
-          }
+          mockResponse.message = '回答時間が終了しました（タイムアウト処理は結果発表時に自動実行されます）';
         }
         break;
     }
